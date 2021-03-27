@@ -176,7 +176,7 @@ function install_packages() {
     fi
     sudo pacman -Sy software-properties-common
     sudo pacman -Yy
-    sudo pacman -Sy nano htop pwgen ufw figlet tmux jq
+    sudo pacman -Sy nano htop pwgen figlet tmux jq
     sudo pacman -Sy build-essential libtool pkg-config
     sudo pacman -Sy libc6-dev m4 g++-multilib
     sudo pacman -Sy autoconf ncurses-dev unzip git python python-zmq
@@ -322,15 +322,15 @@ EOF
 }
 
 function basic_security() {
-    echo -e "${YELLOW}Configuring firewall and enabling fail2ban...${NC}"
-    sudo ufw allow "$SSHPORT"/tcp
-    sudo ufw allow "$PORT"/tcp
-    sudo ufw logging on
-    sudo ufw default deny incoming
-    sudo ufw limit OpenSSH
-    echo "y" | sudo ufw enable > /dev/null 2>&1
-    sudo systemctl enable fail2ban > /dev/null 2>&1
-    sudo systemctl start fail2ban > /dev/null 2>&1
+    # echo -e "${YELLOW}Configuring firewall and enabling fail2ban...${NC}"
+    # sudo ufw allow "$SSHPORT"/tcp
+    # sudo ufw allow "$PORT"/tcp
+    # sudo ufw logging on
+    # sudo ufw default deny incoming
+    # sudo ufw limit OpenSSH
+    # echo "y" | sudo ufw enable > /dev/null 2>&1
+    # sudo systemctl enable fail2ban > /dev/null 2>&1
+    # sudo systemctl start fail2ban > /dev/null 2>&1
 }
 
 function start_daemon() {
