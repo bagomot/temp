@@ -1,46 +1,25 @@
 #!/bin/bash
 
-###############################################################################################################################################################################################################
-# IF PLANNING TO RUN ZELNODE FROM HOME/OFFICE/PERSONAL EQUIPMENT & NETWORK!!!
-# You must understand the implications of running a ZelNode on your on equipment and network. There are many possible security issues. DYOR!!!
-# Running a ZelNode from home should only be done by those with experience/knowledge of how to set up the proper security.
-# It is recommended for most operators to use a VPS to run a ZelNode
-#
-# **Potential Issues (not an exhaustive list):**
-# 1. Your home network IP address will be displayed to the world. Without proper network security in place, a malicious person sniff around your IP for vulnerabilities to access your network.
-# 2. Port forwarding: The p2p port for ZelCash will need to be open.
-# 3. DDOS: VPS providers typically provide mitigation tools to resist a DDOS attack, while home networks typically don't have these tools.
-# 4. Zelcash daemon is ran with sudo permissions, meaning the daemon has elevated access to your system. **Do not run a ZelNode on equipment that also has a funded wallet loaded.**
-# 5. Static vs. Dynamic IPs: If you have a revolving IP, every time the IP address changes, the ZelNode will fail and need to be stood back up.
-# 6. Home connections typically have a monthly data cap. ZelNodes will use 2.5 - 6 TB monthly usage depending on ZelNode tier, which can result in overage charges. Check your ISP agreement.
-# 7. Many home connections provide adequate download speeds but very low upload speeds. ZelNodes require 100mbps (12.5MB/s) download **AND** upload speeds. Ensure your ISP plan can provide this continually.
-# 8. ZelNodes can saturate your network at times. If you are sharing the connection with other devices at home, its possible to fail a benchmark if network is saturated.
-###############################################################################################################################################################################################################
+BOOTSTRAP_ZIP='https://fluxnodeservice.com/daemon_bootstrap.tar.gz'
+BOOTSTRAP_ZIPFILE='daemon_bootstrap.tar.gz'
+BOOTSTRAP_URL_MONGOD='https://fluxnodeservice.com/mongod_bootstrap.tar.gz'
+BOOTSTRAP_ZIPFILE_MONGOD='mongod_bootstrap.tar.gz'
+KDA_BOOTSTRAP_ZIPFILE='kda_bootstrap.tar.gz'
+KDA_BOOTSTRAP_ZIP='https://fluxnodeservice.com/kda_bootstrap.tar.gz'
 
-###### you must be logged in as a sudo user, not root #######
 
+if [[ -d /home/$USER/.zelcash ]]; then
+   CONFIG_DIR='.zelcash'
+   CONFIG_FILE='zelcash.conf'
+    
+else
+    CONFIG_DIR='.flux'
+    CONFIG_FILE='flux.conf'
+fi
+
+FLUX_DIR='zelflux'
+FLUX_APPS_DIR='ZelApps'
 COIN_NAME='zelcash'
-
-#wallet information
-
-UPDATE_FILE='update.sh'
-BOOTSTRAP_ZIP='https://www.dropbox.com/s/kyqe8ji3g1yetfx/zel-bootstrap.zip'
-BOOTSTRAP_ZIPFILE='zel-bootstrap.zip'
-CONFIG_DIR='.zelcash'
-CONFIG_FILE='zelcash.conf'
-RPCPORT='16124'
-PORT='16125'
-COIN_DAEMON='zelcashd'
-COIN_CLI='zelcash-cli'
-COIN_PATH='/usr/local/bin'
-USERNAME="$(whoami)"
-
-#Zelflux ports
-ZELFRONTPORT=16126
-LOCPORT=16127
-ZELNODEPORT=16128
-MDBPORT=27017
-
 
 #color codes
 RED='\033[1;31m'
@@ -50,60 +29,25 @@ SEA="\\033[38;5;49m"
 GREEN='\033[1;32m'
 CYAN='\033[1;36m'
 NC='\033[0m'
-BLINKRED='\033[1;31;5m'
-BLINKSEA="\\033[38;5;49;5m"
 
 #emoji codes
 CHECK_MARK="${GREEN}\xE2\x9C\x94${NC}"
-X_MARK="${RED}\xE2\x9D\x8C${NC}"
+X_MARK="${RED}\xE2\x9C\x96${NC}"
 PIN="${RED}\xF0\x9F\x93\x8C${NC}"
+CLOCK="${GREEN}\xE2\x8C\x9B${NC}"
+ARROW="${SEA}\xE2\x96\xB6${NC}"
+BOOK="${RED}\xF0\x9F\x93\x8B${NC}"
+HOT="${ORANGE}\xF0\x9F\x94\xA5${NC}"
+WORNING="${RED}\xF0\x9F\x9A\xA8${NC}"
+dversion="v5.0"
 
-#end of required details
-#
+PM2_INSTALL="0"
+zelflux_setting_import="0"
 
-#Suppressing password prompts for this user so zelnode can operate
-clear
-sleep 5
-sudo echo -e "$(whoami) ALL=(ALL) NOPASSWD:ALL" | sudo EDITOR='tee -a' visudo
-echo -e "${YELLOW}====================================================================="
-echo -e " Zelnode & Zelflux Install V2"
-echo -e "=====================================================================${NC}"
-echo -e "${CYAN}Dec 2020, updated and created by dk808 from the AltTank Army."
-echo -e "Special thanks to Goose-Tech, Skyslayer, & Packetflow."
-echo -e "Zelnode setup starting, press [CTRL+C] to cancel.${NC}"
-sleep 5
-if [ "$USERNAME" = "root" ]; then
-    echo -e "${CYAN}You are currently logged in as ${GREEN}root${CYAN}, please switch to the username you just created.${NC}"
-    sleep 4
-    exit
-fi
-
-#functions
-function wipe_clean() {
-    echo -e "${YELLOW}Removing any instances of ${COIN_NAME^}${NC}"
-    sudo systemctl stop $COIN_NAME > /dev/null 2>&1 && sleep 2
-    $COIN_CLI stop > /dev/null 2>&1 && sleep 2
-    sudo killall -s SIGKILL $COIN_DAEMON > /dev/null 2>&1
-    zelbench-cli stop > /dev/null 2>&1
-    sudo killall -s SIGKILL zelbenchd > /dev/null 2>&1
-    sudo rm ${COIN_PATH}/zel* > /dev/null 2>&1 && sleep 1
-    sudo rm /usr/bin/${COIN_NAME}* > /dev/null 2>&1 && sleep 1
-    sudo pacman -Sy purge zelcash zelbench > /dev/null 2>&1 && sleep 1
-    sudo pacman -Rs > /dev/null 2>&1 && sleep 1
-    sudo rm /etc/apt/sources.list.d/zelcash.list > /dev/null 2>&1 && sleep 1
-    tmux kill-server > /dev/null 2>&1
-    pm2 unstartup > /dev/null 2>&1
-    pm2 del zelflux > /dev/null 2>&1
-    pm2 flush > /dev/null 2>&1
-    sudo rm -rf zelflux && sleep 1
-    sudo rm -rf ~/$CONFIG_DIR/determ_zelnodes ~/$CONFIG_DIR/sporks ~/$CONFIG_DIR/database ~/$CONFIG_DIR/blocks ~/$CONFIG_DIR/chainstate && sleep 1
-    sudo rm -rf .zelbenchmark && sleep 1
-    rm -rf $BOOTSTRAP_ZIPFILE && sleep 1
-    rm $UPDATE_FILE > /dev/null 2>&1
-    rm restart_zelflux.sh > /dev/null 2>&1
-    rm zelnodeupdate.sh > /dev/null 2>&1
-    rm start.sh > /dev/null 2>&1
-}
+#dialog color
+export NEWT_COLORS='
+title=black,
+'
 
 function spinning_timer() {
     animation=( ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏ )
@@ -112,619 +56,1467 @@ function spinning_timer() {
     do
         for i in "${animation[@]}";
         do
-            echo -ne "${RED}\r$i ${CYAN}${MSG1}${NC}"
+	    echo -e ""
+            echo -ne "${RED}\r\033[1A\033[0K$i ${CYAN}${MSG1}${NC}"
             sleep 0.1
+	    
         done
     done
-    echo -e "${MSG2}"
+    echo -ne "${MSG2}"
 }
 
-function ssh_port() {
-    echo -e "${YELLOW}Detecting SSH port being used...${NC}" && sleep 1
-    SSHPORT=$(grep -w Port /etc/ssh/sshd_config | sed -e 's/.*Port //')
-    if ! whiptail --yesno "Detected you are using $SSHPORT for SSH is this correct?" 8 56; then
-        SSHPORT=$(whiptail --inputbox "Please enter port you are using for SSH" 8 43 3>&1 1>&2 2>&3)
-        echo -e "${YELLOW}Using SSH port:${SEA} $SSHPORT${NC}" && sleep 1
+function string_limit_check_mark_port() {
+if [[ -z "$2" ]]; then
+string="$1"
+string=${string::65}
+else
+string=$1
+string_color=$2
+string_leght=${#string}
+string_leght_color=${#string_color}
+string_diff=$((string_leght_color-string_leght))
+string=${string_color::65+string_diff}
+fi
+echo -e "${PIN}${CYAN}$string[${CHECK_MARK}${CYAN}]${NC}"
+}
+
+function string_limit_check_mark() {
+if [[ -z "$2" ]]; then
+string="$1"
+string=${string::50}
+else
+string=$1
+string_color=$2
+string_leght=${#string}
+string_leght_color=${#string_color}
+string_diff=$((string_leght_color-string_leght))
+string=${string_color::50+string_diff}
+fi
+echo -e "${ARROW} ${CYAN}$string[${CHECK_MARK}${CYAN}]${NC}"
+}
+
+function string_limit_x_mark() {
+if [[ -z "$2" ]]; then
+string="$1"
+string=${string::50}
+else
+string=$1
+string_color=$2
+string_leght=${#string}
+string_leght_color=${#string_color}
+string_diff=$((string_leght_color-string_leght))
+string=${string_color::50+string_diff}
+fi
+echo -e "${ARROW} ${CYAN}$string[${X_MARK}${CYAN}]${NC}"
+}
+
+function tar_file_unpack()
+{
+    echo -e "${ARROW} ${YELLOW}Unpacking bootstrap archive file...${NC}"
+    pv $1 | tar -zx -C $2
+}
+
+function tar_file_pack()
+{
+    echo -e "${ARROW} ${YELLOW}Creating bootstrap archive file...${NC}"
+    tar -czf - $1 | (pv -p --timer --rate --bytes > $2) 2>&1
+}
+
+function check_tar()
+{
+    echo -e "${ARROW} ${YELLOW}Checking  bootstrap file integration...${NC}"
+    
+    if gzip -t "$1" &>/dev/null; then
+    
+        echo -e "${ARROW} ${CYAN}Bootstrap file is valid.................[${CHECK_MARK}${CYAN}]${NC}"
+	
     else
-        echo -e "${YELLOW}Using SSH port:${SEA} $SSHPORT${NC}" && sleep 1
+    
+        echo -e "${ARROW} ${CYAN}Bootstrap file is corrupted.............[${X_MARK}${CYAN}]${NC}"
+	rm -rf $1
+	
     fi
+}
+
+function pm2_install(){
+    
+    tmux kill-server > /dev/null 2>&1 && sleep 1
+    echo -e "${ARROW} ${CYAN}PM2 installing...${NC}"
+    npm install pm2@latest -g > /dev/null 2>&1
+    
+    if pm2 -v > /dev/null 2>&1
+    then
+        rm restart_zelflux.sh > /dev/null 2>&1
+     	echo -e "${ARROW} ${CYAN}Configuring PM2...${NC}"
+   	pm2 startup systemd -u $USER > /dev/null 2>&1
+   	sudo env PATH=$PATH:/home/$USER/.nvm/versions/node/$(node -v)/bin pm2 startup systemd -u $USER --hp /home/$USER > /dev/null 2>&1
+   	pm2 start ~/$FLUX_DIR/start.sh --name flux > /dev/null 2>&1
+    	pm2 save > /dev/null 2>&1
+	pm2 install pm2-logrotate > /dev/null 2>&1
+	pm2 set pm2-logrotate:max_size 6M > /dev/null 2>&1
+	pm2 set pm2-logrotate:retain 6 > /dev/null 2>&1
+    	pm2 set pm2-logrotate:compress true > /dev/null 2>&1
+    	pm2 set pm2-logrotate:workerInterval 3600 > /dev/null 2>&1
+    	pm2 set pm2-logrotate:rotateInterval '0 12 * * 0' > /dev/null 2>&1
+	source ~/.bashrc
+	#echo -e "${ARROW} ${CYAN}PM2 version: ${GREEN}v$(pm2 -v)${CYAN} installed${NC}"
+	string_limit_check_mark "PM2 v$(pm2 -v) installed....................................................." "PM2 ${GREEN}v$(pm2 -v)${CYAN} installed....................................................." 
+  	PM2_INSTALL="1"
+
+    else
+
+	 string_limit_x_mark "PM2 was not installed....................................................."
+	 echo
+    fi 
+
+}
+
+
+function config_file() {
+
+if [[ -f /home/$USER/install_conf.json ]]; then
+import_settings=$(cat /home/$USER/install_conf.json | jq -r '.import_settings')
+ssh_port=$(cat /home/$USER/install_conf.json | jq -r '.ssh_port')
+firewall_disable=$(cat /home/$USER/install_conf.json | jq -r '.firewall_disable')
+bootstrap_url=$(cat /home/$USER/install_conf.json | jq -r '.bootstrap_url')
+bootstrap_zip_del=$(cat /home/$USER/install_conf.json | jq -r '.bootstrap_zip_del')
+swapon=$(cat /home/$USER/install_conf.json | jq -r '.swapon')
+mongo_bootstrap=$(cat /home/$USER/install_conf.json | jq -r '.mongo_bootstrap')
+watchdog=$(cat /home/$USER/install_conf.json | jq -r '.watchdog')
+use_old_chain=$(cat /home/$USER/install_conf.json | jq -r '.use_old_chain')
+prvkey=$(cat /home/$USER/install_conf.json | jq -r '.prvkey')
+outpoint=$(cat /home/$USER/install_conf.json | jq -r '.outpoint')
+index=$(cat /home/$USER/install_conf.json | jq -r '.index')
+zel_id=$(cat /home/$USER/install_conf.json | jq -r '.zelid')
+kda_address=$(cat /home/$USER/install_conf.json | jq -r '.kda_address')
+
+echo -e "${ARROW} ${YELLOW}Install config summary:"
+
+if [[ "$prvkey" != "" && "$outpoint" != "" && "$index" != "" ]];then
+echo -e "${PIN}${CYAN}Import settings from install_conf.json...........................[${CHECK_MARK}${CYAN}]${NC}" && sleep 1
+else
+
+if [[ "$import_settings" == "1" ]]; then
+echo -e "${PIN}${CYAN}Import settings from exist config files..........................[${CHECK_MARK}${CYAN}]${NC}" && sleep 1
+fi
+
+fi
+
+if [[ "$ssh_port" != "" ]]; then
+string_limit_check_mark_port "SSH port: $ssh_port ...................................................................." "SSH port: ${GREEN}$ssh_port ${CYAN}...................................................................."
+sleep 1
+fi
+
+if [[ "$firewall_disable" == "1" ]]; then
+echo -e "${PIN}${CYAN}Firewall disabled diuring installation...........................[${CHECK_MARK}${CYAN}]${NC}" && sleep 1
+else
+echo -e "${PIN}${CYAN}Firewall enabled diuring installation............................[${CHECK_MARK}${CYAN}]${NC}" && sleep 1
+fi
+
+if [[ "$use_old_chain" == "1" ]]; then
+echo -e "${PIN}${CYAN}Diuring re-installation old chain will be use....................[${CHECK_MARK}${CYAN}]${NC}" && sleep 1
+
+else
+
+if [[ "$bootstrap_url" == "" ]]; then
+echo -e "${PIN}${CYAN}Use Flux Bootstrap from source build in scripts..................[${CHECK_MARK}${CYAN}]${NC}" && sleep 1
+else
+echo -e "${PIN}${CYAN}Use Flux Bootstrap from own source...............................[${CHECK_MARK}${CYAN}]${NC}" && sleep 1
+fi
+
+if [[ "$bootstrap_zip_del" == "1" ]]; then
+echo -e "${PIN}${CYAN}Remove Flux Bootstrap archive file...............................[${CHECK_MARK}${CYAN}]${NC}" && sleep 1
+else
+echo -e "${PIN}${CYAN}Leave Flux Bootstrap archive file................................[${CHECK_MARK}${CYAN}]${NC}" && sleep 1
+fi
+
+fi
+
+if [[ "$swapon" == "1" ]]; then
+echo -e "${PIN}${CYAN}Create a file that will be used for swap.........................[${CHECK_MARK}${CYAN}]${NC}" && sleep 1
+fi
+
+if [[ "$mongo_bootstrap" == "1" ]]; then
+echo -e "${PIN}${CYAN}Use Bootstrap for MongoDB........................................[${CHECK_MARK}${CYAN}]${NC}" && sleep 1
+fi
+
+if [[ "$watchdog" == "1" ]]; then
+echo -e "${PIN}${CYAN}Install watchdog.................................................[${CHECK_MARK}${CYAN}]${NC}" && sleep 1
+fi
+fi
 }
 
 function ip_confirm() {
-    echo -e "${YELLOW}Detecting IP address being used...${NC}" && sleep 1
-    WANIP=$(wget http://ipecho.net/plain -O - -q)
-    if ! whiptail --yesno "Detected IP address is $WANIP is this correct?" 8 60; then
-        WANIP=$(whiptail --inputbox "        Enter IP address" 8 36 3>&1 1>&2 2>&3)
+    WANIP=$(wget --timeout=3 --tries=2 http://ipecho.net/plain -O - -q) 
+    if [[ "$WANIP" == "" ]]; then
+     WANIP=$(curl -s -m 3  ifconfig.me)     
+         if [[ "$WANIP" == "" ]]; then
+      	 echo -e "${ARROW} ${CYAN}IP address could not be found, installation stopped .........[${X_MARK}${CYAN}]${NC}"
+	 echo
+	 exit
+    	 fi
     fi
+   string_limit_check_mark "IP: $WANIP ..........................................." "IP: ${GREEN}$WANIP${CYAN} ..........................................." 
 }
 
-function create_swap() {
-    echo -e "${YELLOW}Creating swap if none detected...${NC}" && sleep 1
-    MEM=$(grep MemTotal /proc/meminfo | awk '{print $2}')
-    gb=$(awk "BEGIN {print $MEM/1048576}")
-    GB=$(echo "$gb" | awk '{printf("%d\n",$1 + 0.5)}')
-    if [ "$GB" -lt 2 ]; then
-        (( swapsize=GB*2 ))
-        swap="$swapsize"G
-        echo -e "${YELLOW}Swap set at $swap...${NC}"
-    elif [[ $GB -ge 2 ]] && [[ $GB -le 16 ]]; then
-        swap=4G
-        echo -e "${YELLOW}Swap set at $swap...${NC}"
-    elif [[ $GB -gt 16 ]] && [[ $GB -lt 32 ]]; then
-        swap=2G
-        echo -e "${YELLOW}Swap set at $swap...${NC}"
-    fi
-    if ! grep -q "swapfile" /etc/fstab; then
-        if whiptail --yesno "No swapfile detected would you like to create one?" 8 54; then
-            sudo fallocate -l "$swap" /swapfile
-            sudo chmod 600 /swapfile
-            sudo mkswap /swapfile
-            sudo swapon /swapfile
-            echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-            echo -e "${YELLOW}Created ${SEA}${swap}${YELLOW} swapfile${NC}"
-        else
-            echo -e "${YELLOW}You have opted out on creating a swapfile so no swap created...${NC}"
-        fi
-    fi
-    sleep 2
-}
+function install_flux() {
 
-function install_packages() {
-    echo -e "${YELLOW}Installing Packages...${NC}"
-    if [[ $(lsb_release -d) = *Debian* ]] && [[ $(lsb_release -d) = *9* ]]; then
-        sudo pacman -Sy dirmngr apt-transport-https
-    fi
-    sudo pacman -Sy software-properties-common
-    sudo pacman -Yy
-    sudo pacman -Sy nano htop pwgen figlet tmux jq
-    sudo pacman -Sy build-essential libtool pkg-config
-    sudo pacman -Sy libc6-dev m4 g++-multilib
-    sudo pacman -Sy autoconf ncurses-dev unzip git python python-zmq
-    sudo pacman -Sy wget curl bsdmainutils automake fail2ban
-    sudo pacman -Sy remove sysbench
-    echo -e "${YELLOW}Packages complete...${NC}"
-}
+echo -e "${GREEN}Module: Re-install Flux${NC}"
+echo -e "${YELLOW}================================================================${NC}"
 
-function create_conf() {
-    echo -e "${YELLOW}Creating Conf File...${NC}"
-    if [ -f ~/$CONFIG_DIR/$CONFIG_FILE ]; then
-        echo -e "${CYAN}Existing conf file found backing up to $COIN_NAME.old ...${NC}"
-        mv ~/$CONFIG_DIR/$CONFIG_FILE ~/$CONFIG_DIR/$COIN_NAME.old;
+if [[ "$USER" == "root" ]]
+then
+    echo -e "${CYAN}You are currently logged in as ${GREEN}$USER${NC}"
+    echo -e "${CYAN}Please switch to the user accont.${NC}"
+    echo -e "${YELLOW}================================================================${NC}"
+    echo -e "${NC}"
+    exit
+fi
+
+ if pm2 -v > /dev/null 2>&1; then
+ pm2 del zelflux > /dev/null 2>&1
+ pm2 del flux > /dev/null 2>&1
+ pm2 save > /dev/null 2>&1
+ fi
+ 
+docker_check=$(docker container ls -a | grep 'zelcash' | grep -Eo "^[0-9a-z]{8,}\b" | wc -l)
+resource_check=$(df | egrep 'flux' | awk '{ print $1}' | wc -l)
+mongod_check=$(mongoexport -d localzelapps -c zelappsinformation --jsonArray --pretty --quiet  | jq -r .[].name | head -n1)
+
+if [[ "$mongod_check" != "" && "$mongod_check" != "null" ]]; then
+echo -e "${ARROW} ${YELLOW}Detected Flux MongoDB local apps collection ...${NC}" && sleep 1
+echo -e "${ARROW} ${CYAN}Cleaning MongoDB Flux local apps collection...${NC}" && sleep 1
+echo "db.zelappsinformation.drop()" | mongo localzelapps > /dev/null 2>&1
+fi
+
+if [[ $docker_check != 0 ]]; then
+echo -e "${ARROW} ${YELLOW}Detected running docker container...${NC}" && sleep 1
+echo -e "${ARROW} ${CYAN}Removing containers...${NC}"
+sudo aa-remove-unknown && sudo service docker restart > /dev/null 2>&1 && sleep 2 
+sleep 5
+#docker ps | grep -Eo "^[0-9a-z]{8,}\b" |
+docker container ls -a | grep 'zelcash' | grep -Eo "^[0-9a-z]{8,}\b" |
+while read line; do
+sudo docker stop $line > /dev/null 2>&1 && sleep 2 
+sudo docker rm $line > /dev/null 2>&1 && sleep 2 
+done
+fi
+
+if [[ $resource_check != 0 ]]; then
+echo -e "${ARROW} ${YELLOW}Detected locked resource...${NC}" && sleep 1
+echo -e "${ARROW} ${CYAN}Unmounting locked Flux resource${NC}" && sleep 1
+df | egrep 'flux' | awk '{ print $1}' |
+while read line; do
+sudo umount $line && sleep 1
+done
+fi
+
+if [ -f /home/$USER/$FLUX_DIR/config/userconfig.js ]; then
+
+    echo -e "${ARROW} ${CYAN}Importing setting...${NC}"
+    zel_id=$(grep -w zelid /home/$USER/$FLUX_DIR/config/userconfig.js | sed -e 's/.*zelid: .//' | sed -e 's/.\{2\}$//')
+    WANIP=$(grep -w ipaddress /home/$USER/$FLUX_DIR/config/userconfig.js | sed -e 's/.*ipaddress: .//' | sed -e 's/.\{2\}$//')
+    
+    echo -e "${PIN}${CYAN}Zel ID = ${GREEN}$zel_id${NC}" && sleep 1
+    
+    KDA_A=$(grep -w kadena /home/$USER/$FLUX_DIR/config/userconfig.js | sed -e 's/.*kadena: .//' | sed -e 's/.\{2\}$//')
+    
+    if [[ "$KDA_A" != "" ]]; then
+    
+    echo -e "${PIN}${CYAN}Kadena address = ${GREEN}$KDA_A${NC}" && sleep 1
+    
     fi
-    RPCUSER=$(pwgen -1 8 -n)
-    PASSWORD=$(pwgen -1 20 -n)
-    zelnodeprivkey=$(whiptail --title "ZELNODE PRIVKEY" --inputbox "Enter your Zelnode Privkey generated by your Zelcore/Zelmate wallet" 8 72 3>&1 1>&2 2>&3)
-    zelnodeoutpoint=$(whiptail --title "ZELNODE OUTPOINT" --inputbox "Enter your Zelnode collateral txid" 8 72 3>&1 1>&2 2>&3)
-    zelnodeindex=$(whiptail --title "ZELNODE INDEX" --inputbox "Enter your Zelnode collateral output index usually a 0/1" 8 60 3>&1 1>&2 2>&3)
-    if [ "x$PASSWORD" = "x" ]; then
-        PASSWORD=${WANIP}-$(date +%s)
-    fi
-    mkdir ~/$CONFIG_DIR > /dev/null 2>&1
-    touch ~/$CONFIG_DIR/$CONFIG_FILE
-    cat << EOF > ~/$CONFIG_DIR/$CONFIG_FILE
-rpcuser=$RPCUSER
-rpcpassword=$PASSWORD
-rpcallowip=127.0.0.1
-rpcallowip=172.18.0.1
-rpcport=$RPCPORT
-port=$PORT
-zelnode=1
-zelnodeprivkey=$zelnodeprivkey
-zelnodeoutpoint=$zelnodeoutpoint
-zelnodeindex=$zelnodeindex
-server=1
-daemon=1
-txindex=1
-listen=1
-externalip=$WANIP
-bind=$WANIP
-addnode=explorer.zel.network
-addnode=explorer2.zel.network
-addnode=explorer.zel.zelcore.io
-addnode=blockbook.zel.network
-maxconnections=256
+    
+   
+    echo -e "${PIN}${CYAN}IP = ${GREEN}$WANIP${NC}" && sleep 1   
+    echo 
+    echo -e "${ARROW} ${CYAN}Removing any instances of Flux....${NC}"
+    sudo rm -rf $FLUX_DIR  > /dev/null 2>&1 && sleep 2
+    #sudo rm -rf zelflux  > /dev/null 2>&1 && sleep 2
+    zelflux_setting_import="1"
+
+fi
+
+
+
+if [ -d /home/$USER/$FLUX_DIR ]; then
+
+    echo -e "${ARROW} ${CYAN}Removing any instances of Flux....${NC}"
+    #sudo rm -rf zelflux  > /dev/null 2>&1 && sleep 2
+    sudo rm -rf $FLUX_DIR  > /dev/null 2>&1 && sleep 2
+    
+fi
+
+echo -e "${ARROW} ${CYAN}Flux downloading...${NC}"
+git clone https://github.com/zelcash/zelflux.git > /dev/null 2>&1 && sleep 2
+
+if [ -d /home/$USER/$FLUX_DIR ]
+then
+
+if [[ -f /home/$USER/$FLUX_DIR/package.json ]]; then
+  current_ver=$(jq -r '.version' /home/$USER/$FLUX_DIR/package.json)
+else
+  string_limit_x_mark "Flux was not downloaded, run script again..........................................."
+  echo
+  exit
+fi
+
+string_limit_check_mark "Flux v$current_ver downloaded..........................................." "Flux ${GREEN}v$current_ver${CYAN} downloaded..........................................."
+else
+string_limit_x_mark "Flux was not downloaded, run script again..........................................."
+echo
+exit
+fi
+
+
+if [[ "$zelflux_setting_import" == "0" ]]; then
+
+ip_confirm
+
+while true
+  do
+    zel_id="$(whiptail --title "MULTITOOLBOX" --inputbox "Enter your ZEL ID from ZelCore (Apps -> Zel ID (CLICK QR CODE)) " 8 72 3>&1 1>&2 2>&3)"
+    if [ $(printf "%s" "$zel_id" | wc -c) -eq "34" ] || [ $(printf "%s" "$zel_id" | wc -c) -eq "33" ]; then
+      string_limit_check_mark "Zel ID is valid..........................................."
+      break
+    else
+      string_limit_x_mark "Zel ID is not valid try again..........................................."
+      sleep 2
+   fi
+
+ done
+ 
+ 
+  touch ~/$FLUX_DIR/config/userconfig.js
+    cat << EOF > ~/$FLUX_DIR/config/userconfig.js
+module.exports = {
+      initial: {
+        ipaddress: '${WANIP}',
+        zelid: '${zel_id}',
+        testnet: false
+      }
+    }
 EOF
-    sleep 2
+
+else
+
+if [[ "$KDA_A" != "" ]]; then
+
+  touch ~/$FLUX_DIR/config/userconfig.js
+    cat << EOF > ~/$FLUX_DIR/config/userconfig.js
+module.exports = {
+      initial: {
+        ipaddress: '${WANIP}',
+        zelid: '${zel_id}',
+	kadena: '${KDA_A}',
+        testnet: false
+      }
+    }
+EOF
+
+else
+
+  touch ~/$FLUX_DIR/config/userconfig.js
+    cat << EOF > ~/$FLUX_DIR/config/userconfig.js
+module.exports = {
+      initial: {
+        ipaddress: '${WANIP}',
+        zelid: '${zel_id}',
+        testnet: false
+      }
+    }
+EOF
+
+fi
+
+fi
+   
+if [[ -f /home/$USER/$FLUX_DIR/config/userconfig.js ]]; then
+string_limit_check_mark "Flux configuration successfull..........................................."
+else
+string_limit_x_mark "Flux installation failed, missing config file..........................................."
+echo
+exit
+fi
+
+ if pm2 -v > /dev/null 2>&1; then 
+ 
+   rm restart_zelflux.sh > /dev/null 2>&1
+   pm2 del flux > /dev/null 2>&1
+   pm2 del zelflux > /dev/null 2>&1
+   pm2 save > /dev/null 2>&1
+   echo -e "${ARROW} ${CYAN}Starting Flux....${NC}"
+   echo -e "${ARROW} ${CYAN}Flux loading will take 2-3min....${NC}"
+   echo
+   pm2 start /home/$USER/$FLUX_DIR/start.sh --restart-delay=60000 --max-restarts=40 --name flux --time  > /dev/null 2>&1
+   pm2 save > /dev/null 2>&1
+   pm2 list
+
+ else
+ 
+    pm2_install()
+    if [[ "$PM2_INSTALL" == "1" ]]; then
+      echo -e "${ARROW} ${CYAN}Starting Flux....${NC}"
+      echo -e "${ARROW} ${CYAN}Flux loading will take 2-3min....${NC}"
+      echo
+      pm2 list
+    fi
+ fi
+
 }
 
-function zel_package() {
-    sudo pacman -Yy
-    sudo pacman -Yy zelcash zelbench
-    sudo chmod 755 $COIN_PATH/${COIN_NAME}*
-}
+function create_config() {
+if [[ "$USER" == "root" ]]
+then
+    echo -e "${CYAN}You are currently logged in as ${GREEN}$USER${NC}"
+    echo -e "${CYAN}Please switch to the user accont.${NC}"
+    echo -e "${YELLOW}================================================================${NC}"
+    echo -e "${NC}"
+    exit
+fi
 
-function install_zel() {
-    echo -e "${YELLOW}Installing Zel apt packages...${NC}"
-    echo 'deb https://apt.zel.network/ all main' | sudo tee /etc/apt/sources.list.d/zelcash.list
+echo -e "${GREEN}Module: Create FluxNode installation config file${NC}"
+echo -e "${YELLOW}================================================================${NC}"
+
+
+if jq --version > /dev/null 2>&1; then
+sleep 0.2
+else
+echo -e "${ARROW} ${YELLOW}Installing JQ....${NC}"
+sudo apt  install jq -y > /dev/null 2>&1
+
+  if jq --version > /dev/null 2>&1
+  then
+    #echo -e "${ARROW} ${CYAN}Nodejs version: ${GREEN}$(node -v)${CYAN} installed${NC}"
+    string_limit_check_mark "JQ $(jq --version) installed................................." "JQ ${GREEN}$(jq --version)${CYAN} installed................................."
+    echo
+  else
+    #echo -e "${ARROW} ${CYAN}Nodejs was not installed${NC}"
+    string_limit_x_mark "JQ was not installed................................."
+    echo
+    exit
+  fi
+fi
+
+skip_zelcash_config='0'
+skip_bootstrap='0'
+
+if [[ -d /home/$USER/$CONFIG_DIR ]]; then
+
+  if whiptail --yesno "Would you like import old settings from daemon and Flux?" 8 65; then
+     import_settings='1'
+     skip_zelcash_config='1'
+     sleep 1
+  else
+     import_settings='0'
+     sleep 1
+  fi
+
+  if whiptail --yesno "Would you like use exist Flux chain?" 8 65; then
+    use_old_chain='1'
+    skip_bootstrap='1'
     sleep 1
-    if [ ! -f /etc/apt/sources.list.d/zelcash.list ]; then
-        echo 'deb https://zelcash.github.io/aptrepo/ all main' | sudo tee /etc/apt/sources.list.d/zelcash.list
-    fi
-    gpg --keyserver keyserver.ubuntu.com --recv 4B69CA27A986265D
-    gpg --export 4B69CA27A986265D | sudo apt-key add -
-    zel_package && sleep 2
-    if ! gpg --list-keys Zel > /dev/null; then
-        echo -e "${YELLOW}First attempt to retrieve keys failed will try a different keyserver.${NC}"
-        gpg --keyserver na.pool.sks-keyservers.net --recv 4B69CA27A986265D
-        gpg --export 4B69CA27A986265D | sudo apt-key add -
-        zel_package && sleep 2
-        if ! gpg --list-keys Zel > /dev/null; then
-            echo -e "${YELLOW}Second keyserver also failed will try a different keyserver.${NC}"
-            gpg --keyserver eu.pool.sks-keyservers.net --recv 4B69CA27A986265D
-            gpg --export 4B69CA27A986265D | sudo apt-key add -
-            zel_package && sleep 2
-            if ! gpg --list-keys Zel > /dev/null; then
-                echo -e "${YELLOW}Third keyserver also failed will try a different keyserver.${NC}"
-                gpg --keyserver pgpkeys.urown.net --recv 4B69CA27A986265D
-                gpg --export 4B69CA27A986265D | sudo apt-key add -
-                zel_package && sleep 2
-                if ! gpg --list-keys Zel > /dev/null; then
-                    echo -e "${YELLOW}Last keyserver also failed will try one last keyserver.${NC}"
-                    gpg --keyserver keys.gnupg.net --recv 4B69CA27A986265D
-                    gpg --export 4B69CA27A986265D | sudo apt-key add -
-                    zel_package && sleep 2
-                fi
-            fi
-        fi
-    fi
-}
+  else
+    use_old_chain='0'
+    sleep 1
+  fi
 
-function zk_params() {
-    echo -e "${YELLOW}Installing zkSNARK params...${NC}"
-    bash zelcash-fetch-params.sh
-    sudo chown -R "$USERNAME":"$USERNAME" /home/"$USERNAME"
-}
 
-function bootstrap() {
-    if [[ -e ~/$CONFIG_DIR/blocks ]] && [[ -e ~/$CONFIG_DIR/chainstate ]]; then
-        rm -rf ~/$CONFIG_DIR/blocks ~/$CONFIG_DIR/chainstate
-        echo -e "${YELLOW}Downloading and installing wallet bootstrap please be patient...${NC}"
-        wget $BOOTSTRAP_ZIP
-        unzip $BOOTSTRAP_ZIPFILE -d ~/$CONFIG_DIR
-        rm -rf $BOOTSTRAP_ZIPFILE
-    else
-        echo -e "${YELLOW}Downloading and installing wallet bootstrap please be patient...${NC}"
-        wget $BOOTSTRAP_ZIP
-        unzip $BOOTSTRAP_ZIPFILE -d ~/$CONFIG_DIR
-        rm -rf $BOOTSTRAP_ZIPFILE
-    fi
-}
+fi
 
-function create_service() {
-    echo -e "${YELLOW}Creating ${COIN_NAME^} service...${NC}"
-    sudo touch /etc/systemd/system/$COIN_NAME.service
-    sudo chown "$USERNAME":"$USERNAME" /etc/systemd/system/$COIN_NAME.service
-    cat << EOF > /etc/systemd/system/$COIN_NAME.service
-[Unit]
-Description=$COIN_NAME service
-After=network.target
-[Service]
-Type=forking
-User=$USERNAME
-Group=$USERNAME
-WorkingDirectory=/home/$USERNAME/$CONFIG_DIR/
-ExecStart=$COIN_PATH/$COIN_DAEMON -datadir=/home/$USERNAME/$CONFIG_DIR/ -conf=/home/$USERNAME/$CONFIG_DIR/$CONFIG_FILE -daemon
-ExecStop=-$COIN_PATH/$COIN_CLI stop
-Restart=always
-RestartSec=3
-PrivateTmp=true
-TimeoutStopSec=60s
-TimeoutStartSec=10s
-StartLimitInterval=120s
-StartLimitBurst=5
-[Install]
-WantedBy=multi-user.target
+if [[ "$skip_zelcash_config" == "1" ]]; then
+prvkey=""
+outpoint=""
+index=""
+zelid=""
+kda_address=""
+else
+
+prvkey=$(whiptail --inputbox "Enter your FluxNode Private Key from Zelcore" 8 65 3>&1 1>&2 2>&3)
+sleep 1
+outpoint=$(whiptail --inputbox "Enter your FluxNode Output TX ID from Zelcore" 8 72 3>&1 1>&2 2>&3)
+sleep 1
+index=$(whiptail --inputbox "Enter your FluxNode Output Index from Zelcore" 8 65 3>&1 1>&2 2>&3)
+sleep 1
+zel_id=$(whiptail --inputbox "Enter your ZEL ID from ZelCore (Apps -> Zel ID (CLICK QR CODE)) " 8 72 3>&1 1>&2 2>&3)
+sleep 1
+kda_address=$(whiptail --inputbox "Enter your Kadena address from Zelcore. Copy and paste the first address under the QR code. Do not edit out anything just paste what you copied." 8 72 3>&1 1>&2 2>&3)
+sleep 1
+
+fi
+
+ssh_port=$(whiptail --inputbox "Enter port you are using for SSH (default 22)" 8 65 3>&1 1>&2 2>&3)
+sleep 1
+
+
+pettern='^[0-9]+$'
+if [[ $ssh_port =~ $pettern ]] ; then
+sleep 1
+else
+echo -e "${ARROW} ${CYAN}SSH port must be integer.................................[${X_MARK}${CYAN}]${NC}"
+echo
+exit
+fi
+
+
+if whiptail --yesno "Would you like disable firewall diuring installation?" 8 65; then
+firewall_disable='1'
+sleep 1
+else
+firewall_disable='0'
+sleep 1
+fi
+
+
+if [[ "$skip_bootstrap" == "0" ]]; then
+
+if whiptail --yesno "Would you like use Flux bootstrap from script source?" 8 65; then
+bootstrap_url="$BOOTSTRAP_ZIP"
+sleep 1
+else
+bootstrap_url=$(whiptail --inputbox "Enter your Flux bootstrap URL" 8 65 3>&1 1>&2 2>&3)
+sleep 1
+fi
+
+if whiptail --yesno "Would you like keep bootstrap archive file localy?" 8 65; then
+bootstrap_zip_del='0'
+sleep 1
+else
+bootstrap_zip_del='1'
+sleep 1
+fi
+fi
+
+if whiptail --yesno "Would you like create swapfile?" 8 65; then
+swapon='1'
+sleep 1
+else
+swapon='0'
+sleep 1
+fi
+
+
+if whiptail --yesno "Would you like use mongod bootstrap file?" 8 65; then
+mongo_bootstrap='1'
+sleep 1
+else
+mongo_bootstrap='0'
+sleep 1
+fi
+
+
+if whiptail --yesno "Would you like install FluxNode watchdog?" 8 65; then
+watchdog='1'
+sleep 1
+else
+watchdog='0'
+sleep 1
+fi
+
+rm /home/$USER/install_conf.json > /dev/null 2>&1
+sudo touch /home/$USER/install_conf.json
+sudo chown $USER:$USER /home/$USER/install_conf.json
+    cat << EOF > /home/$USER/install_conf.json
+{
+  "import_settings": "${import_settings}",
+  "prvkey": "${prvkey}",
+  "outpoint": "${outpoint}",
+  "index": "${index}",
+  "zelid": "${zel_id}",
+  "kda_address": "${kda_address}",
+  "ssh_port": "${ssh_port}",
+  "firewall_disable": "${firewall_disable}",
+  "bootstrap_url": "${bootstrap_url}",
+  "bootstrap_zip_del": "${bootstrap_zip_del}",
+  "swapon": "${swapon}",
+  "mongo_bootstrap": "${mongo_bootstrap}",
+  "use_old_chain": "${use_old_chain}",
+  "watchdog": "${watchdog}"
+}
 EOF
-    sudo chown root:root /etc/systemd/system/$COIN_NAME.service
-    sudo systemctl daemon-reload
-    sleep 4
-    sudo systemctl enable $COIN_NAME.service > /dev/null 2>&1
+config_file
+echo
+
+
+
 }
 
-function basic_security() {
-    # echo -e "${YELLOW}Configuring firewall and enabling fail2ban...${NC}"
-    # sudo ufw allow "$SSHPORT"/tcp
-    # sudo ufw allow "$PORT"/tcp
-    # sudo ufw logging on
-    # sudo ufw default deny incoming
-    # sudo ufw limit OpenSSH
-    # echo "y" | sudo ufw enable > /dev/null 2>&1
-    # sudo systemctl enable fail2ban > /dev/null 2>&1
-    # sudo systemctl start fail2ban > /dev/null 2>&1
+
+function install_watchdog() {
+
+if [[ "$USER" == "root" ]]
+then
+    echo -e "${CYAN}You are currently logged in as ${GREEN}$USER${NC}"
+    echo -e "${CYAN}Please switch to the user accont.${NC}"
+    echo -e "${YELLOW}================================================================${NC}"
+    echo -e "${NC}"
+    exit
+fi
+
+echo -e "${GREEN}Module: Install watchdog for FluxNode${NC}"
+echo -e "${YELLOW}================================================================${NC}"
+
+if ! pm2 -v > /dev/null 2>&1
+then
+pm2_install
+ if [[ "$PM2_INSTALL" == "0" ]]; then
+   exit
+ fi
+echo -e ""
+fi
+
+echo -e "${ARROW} ${CYAN}Cleaning...${NC}"
+pm2 del watchdog  > /dev/null 2>&1
+pm2 save  > /dev/null 2>&1
+sudo rm -rf /home/$USER/watchdog  > /dev/null 2>&1
+
+echo -e "${ARROW} ${CYAN}Downloading...${NC}"
+cd && git clone https://github.com/XK4MiLX/watchdog.git > /dev/null 2>&1
+echo -e "${ARROW} ${CYAN}Installing git hooks....${NC}"
+wget https://raw.githubusercontent.com/XK4MiLX/zelnode/master/post-merge > /dev/null 2>&1
+mv post-merge /home/$USER/watchdog/.git/hooks/post-merge
+sudo chmod +x /home/$USER/watchdog/.git/hooks/post-merge
+echo -e "${ARROW} ${CYAN}Installing watchdog module....${NC}"
+cd watchdog && npm install > /dev/null 2>&1
+echo -e "${ARROW} ${CYAN}Starting watchdog...${NC}"
+pm2 start /home/$USER/watchdog/watchdog.js --name watchdog --watch /home/$USER/watchdog --ignore-watch '"./**/*.git" "./**/*node_modules" "./**/*watchdog_error.log" "./**/*config.js"' --watch-delay 10 > /dev/null 2>&1 
+pm2 save > /dev/null 2>&1
+if [[ -f /home/$USER/watchdog/watchdog.js ]]
+then
+current_ver=$(jq -r '.version' /home/$USER/watchdog/package.json)
+#echo -e "${ARROW} ${CYAN}Watchdog ${GREEN}v$current_ver${CYAN} installed successful.${NC}"
+string_limit_check_mark "Watchdog v$current_ver installed..........................................." "Watchdog ${GREEN}v$current_ver${CYAN} installed..........................................."
+else
+#echo -e "${ARROW} ${CYAN}Watchdog installion failed.${NC}"
+string_limit_x_mark "Watchdog was not installed..........................................."
+fi
+echo
 }
 
-function start_daemon() {
-    NUM='105'
-    MSG1='Starting daemon & syncing with chain please be patient this will take about 2 min...'
-    MSG2=''
-    if sudo systemctl start $COIN_NAME.service > /dev/null 2>&1; then
-        echo && spinning_timer
-        NUM='10'
-        MSG1='Getting info...'
-        MSG2="${CHECK_MARK}"
-        echo && spinning_timer
-        echo
-        $COIN_CLI getinfo
-    else
-        echo -e "${RED}Something is not right the daemon did not start. Will exit out so try and run the script again.${NC}"
+
+function kda_bootstrap() {
+
+    echo -e "${GREEN}Module: Restore Kadena node blockchain from bootstrap${NC}"
+    echo -e "${YELLOW}================================================================${NC}"
+
+    if [[ "$USER" == "root" ]]; then
+    
+        echo -e "${CYAN}You are currently logged in as ${GREEN}$USER${NC}"
+        echo -e "${CYAN}Please switch to the user accont.${NC}"
+        echo -e "${YELLOW}================================================================${NC}"
+        echo -e "${NC}"
         exit
     fi
-}
-
-function log_rotate() {
-    echo -e "${YELLOW}Configuring log rotate function for debug and error logs...${NC}"
-    sleep 1
-    if [ -f /etc/logrotate.d/zeldebuglog ]; then
-        echo -e "${YELLOW}Existing log rotate conf found, backing up to ~/zeldebuglogrotate.old ...${NC}"
-        sudo mv /etc/logrotate.d/zeldebuglog ~/zeldebuglogrotate.old
-        sleep 2
-    fi
-    sudo touch /etc/logrotate.d/zeldebuglog
-    sudo chown "$USERNAME":"$USERNAME" /etc/logrotate.d/zeldebuglog
-    cat << EOF > /etc/logrotate.d/zeldebuglog
-/home/$USERNAME/.zelcash/debug.log {
-  compress
-  copytruncate
-  missingok
-  daily
-  rotate 7
-}
-
-/home/$USERNAME/.zelbenchmark/debug.log {
-  compress
-  copytruncate
-  missingok
-  monthly
-  rotate 2
-}
-
-/home/$USERNAME/zelflux/error.log {
-  compress
-  copytruncate
-  missingok
-  monthly
-  rotate 2
-}
-EOF
-    sudo chown root:root /etc/logrotate.d/zeldebuglog
-}
-
-function install_zelflux() {
-    echo -e "${YELLOW}Detect OS version to install Mongodb, Nodejs, and updating firewall to install Zelflux...${NC}"
-    sudo ufw allow $ZELFRONTPORT/tcp
-    sudo ufw allow $LOCPORT/tcp
-    sudo ufw allow $ZELNODEPORT/tcp
-    sudo ufw allow $MDBPORT/tcp
-    if mongod --version > /dev/null 2>&1; then
-        echo -e "${YELLOW}Mongodb already installed...${NC}"
-        sudo systemctl start mongod
-        sudo systemctl enable mongod
-        install_nodejs
-        mongo_backup
-        mongo_logrotate
-        zelflux
-    else
-        if [[ $(lsb_release -r) = *16.04* ]]; then
-            wget -qO - https://www.mongodb.org/static/pgp/server-4.2.asc | sudo apt-key add -
-            echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/4.2 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-4.2.list
-            install_mongod
-            install_nodejs
-            mongo_backup
-            zelflux
-        elif [[ $(lsb_release -r) = *18.04* ]]; then
-            wget -qO - https://www.mongodb.org/static/pgp/server-4.2.asc | sudo apt-key add -
-            echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/4.2 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-4.2.list
-            install_mongod
-            install_nodejs
-            mongo_backup
-            zelflux
-        elif [[ $(lsb_release -d) = *Debian* ]] && [[ $(lsb_release -d) = *9* ]]; then
-            wget -qO - https://www.mongodb.org/static/pgp/server-4.2.asc | sudo apt-key add -
-            echo "deb [ arch=amd64 ] http://repo.mongodb.org/apt/debian stretch/mongodb-org/4.2 main" | sudo tee /etc/apt/sources.list.d/mongodb-org-4.2.list
-            install_mongod
-            install_nodejs
-            mongo_backup
-            zelflux
-        elif [[ $(lsb_release -d) = *Debian* ]] && [[ $(lsb_release -d) = *10* ]]; then
-            wget -qO - https://www.mongodb.org/static/pgp/server-4.2.asc | sudo apt-key add -
-            echo "deb [ arch=amd64 ] http://repo.mongodb.org/apt/debian buster/mongodb-org/4.2 main" | sudo tee /etc/apt/sources.list.d/mongodb-org-4.2.list
-            install_mongod
-            install_nodejs
-            mongo_backup
-            zelflux
-        fi
-    fi
-    sleep 2
-}
-
-function install_mongod() {
-    sudo pacman -Yy
-    sudo pacman -Sy mongodb-org
-    sudo systemctl daemon-reload
-    sudo systemctl start mongod
-    sudo systemctl enable mongod
-    sleep 5
-    mongo_logrotate
-}
-
-function install_nodejs() {
-    if ! node -v > /dev/null 2>&1; then
-        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.35.3/install.sh | bash
-        . ~/.profile
-        nvm install --lts
-    else
-        echo -e "${YELLOW}Nodejs already installed will skip installing it.${NC}"
-    fi
-}
-
-function mongo_backup() {
-    if whiptail --yesno "Would you like to bootstrap the Mongodb databases?" 9 54; then
-        wget -qO- https://www.dropbox.com/s/ddznce9pp2kuup1/mongo_dump.tar.gz | tar xvz
-        mongorestore dump
-    fi
-}
-
-function mongo_logrotate() {
-    echo -e "${YELLOW}Configuring log rotate function for Mongodb logs...${NC}"
-    sleep 1
-    if [ -f /etc/logrotate.d/mongolog ]; then
-        echo -e "${YELLOW}Existing log rotate conf found, backing up to ~/mongolog.old ...${NC}"
-        sudo mv /etc/logrotate.d/mongolog ~/mongolog.old
-        sleep 2
-    fi
-    sudo touch /etc/logrotate.d/mongolog
-    sudo chown "$USERNAME":"$USERNAME" /etc/logrotate.d/mongolog
-    cat << EOF > /etc/logrotate.d/mongolog
-/var/log/mongodb/*.log {
-  compress
-  copytruncate
-  missingok
-  daily
-  rotate 14
-}
-EOF
-    sudo chown root:root /etc/logrotate.d/mongolog
-}
-
-function zelflux() {
-    if [ -d "./zelflux" ]; then
-        sudo rm -rf zelflux
-    fi
-    ZELID=$(whiptail --inputbox "Enter your ZelID found in the Zelcore+/Apps section of your Zelcore" 8 71 3>&1 1>&2 2>&3)
-    if whiptail --yesno "Are you planning to run the Kadena app? Please note that only Super/BAMF nodes are allowed to run this app." 8 60 3>&1 1>&2 2>&3; then
-        KADENA=$(whiptail --inputbox "Please enter your Kadena address from Zelcore. Copy and paste the first address under the QR code. Do not edit out anything just paste what you copied." 8 85 3>&1 1>&2 2>&3)
-        git clone https://github.com/zelcash/zelflux.git
-        touch ~/zelflux/config/userconfig.js
-        cat << EOF > ~/zelflux/config/userconfig.js
-module.exports = {
-      initial: {
-        ipaddress: '${WANIP}',
-        zelid: '${ZELID}',
-        kadena: '${KADENA}',
-        testnet: false,
-      }
-    }
-EOF
-    else
-        git clone https://github.com/zelcash/zelflux.git
-        touch ~/zelflux/config/userconfig.js
-        cat << EOF > ~/zelflux/config/userconfig.js
-module.exports = {
-      initial: {
-        ipaddress: '${WANIP}',
-        zelid: '${ZELID}',
-        testnet: false,
-      }
-    }
-EOF
-    fi
-    if ! pm2 -v > /dev/null 2>&1; then
-        npm i -g pm2
-        pm2_startup
-    else
-        pm2_startup
-    fi
-}
-
-function pm2_startup() {
-    pm2 startup systemd -u $USERNAME
-    sudo env PATH=$PATH:/home/$USERNAME/.nvm/versions/node/$(node -v)/bin pm2 startup systemd -u $USERNAME --hp /home/$USERNAME
-    pm2 start ~/zelflux/start.sh --name zelflux
-    pm2 save
-    sleep 2
-    pm2_logrotate
-}
-
-function pm2_logrotate() {
-    echo -e "${YELLOW}Configuring log rotate function for pm2 logs that's managing Zelflux...${NC}"
-    if [ -d ~/.pm2/modules/pm2-logrotate ]; then
-        echo -e "${YELLOW}Pm2-logrotate already installed will skip installation...${NC}"
-        set_pm2log
-    else
-        pm2 install pm2-logrotate
-        set_pm2log
-    fi
-}
-
-function set_pm2log() {
-    pm2 set pm2-logrotate:max_size 5M >/dev/null
-    pm2 set pm2-logrotate:retain 6 >/dev/null
-    pm2 set pm2-logrotate:compress true >/dev/null
-    pm2 set pm2-logrotate:workerInterval 3600 >/dev/null
-    pm2 set pm2-logrotate:rotateInterval '0 12 * * 0' >/dev/null
-}
-
-function status_loop() {
-    if [ -d "/home/$USERNAME/dump" ]; then
-        while true
-        do
-            clear
-            echo -e "${YELLOW}======================================================================================"
-            echo -e "${GREEN} ZELNODE AND MONGODB IS SYNCING"
-            echo -e " THIS SCREEN REFRESHES EVERY 30 SECONDS"
-            echo -e " CHECK BLOCK HEIGHT AT https://explorer.zel.network/"
-            echo -e " YOU COULD START YOUR ZELNODE FROM YOUR CONTROL WALLET WHILE IT SYNCS"
-            echo -e " MONGODB SYNCING COULD TAKE SOME MINUTES PLEASE BE PATIENT"
-            echo -e "${YELLOW}======================================================================================${NC}"
-            echo
-            $COIN_CLI getinfo
-            echo
-            if [[ $(wget -nv -qO - https://explorer.zel.network/api/status?q=getInfo | jq '.info.blocks') == $(${COIN_CLI} getinfo | jq '.blocks') ]]; then
-                echo -e "${CYAN}Zelnode on block ${GREEN}$(${COIN_CLI} getinfo | jq '.blocks')${NC}"
-            else
-                echo -e "${CYAN}Zelnode on block ${BLINKRED}$(${COIN_CLI} getinfo | jq '.blocks')${NC}"
-            fi
-            if [[ $(wget -nv -qO - https://explorer.zel.network/api/status?q=getInfo | jq '.info.blocks') == $(wget -nv -qO - http://${WANIP}:16127/explorer/scannedheight | jq '.data.generalScannedHeight') ]]; then
-                echo -e "${CYAN}Mongodb on block ${GREEN}$(wget -nv -qO - http://${WANIP}:16127/explorer/scannedheight | jq '.data.generalScannedHeight')${NC}"
-            else
-                echo -e "${CYAN}Mongodb on block ${BLINKRED}$(wget -nv -qO - http://${WANIP}:16127/explorer/scannedheight | jq '.data.generalScannedHeight')${NC}"
-            fi
-            sleep 2
-            echo
-            NUM='30'
-            MSG1="${CYAN}Refreshes every 30 seconds while syncing chain and data. Refresh loop will stop automatically once it's fully synced.${NC}"
-            MSG2=''
-            spinning_timer
-            if [[ $(wget -nv -qO - https://explorer.zel.network/api/status?q=getInfo | jq '.info.blocks') == $(${COIN_CLI} getinfo | jq '.blocks') ]] && [[ $(wget -nv -qO - http://${WANIP}:16127/explorer/scannedheight | jq '.data.generalScannedHeight') == $(wget -nv -qO - https://explorer.zel.network/api/status?q=getInfo | jq '.info.blocks') ]]; then
-                break
-            fi
-        done
-        rm -rf dump && sleep 3
-        zelbench-cli restartnodebenchmarks > /dev/null 2>&1
-        check
-        display_banner
-    else
-        while true
-        do
-            clear
-            echo -e "${YELLOW}======================================================================================"
-            echo -e "${GREEN} ZELNODE AND IS SYNCING"
-            echo -e " THIS SCREEN REFRESHES EVERY 30 SECONDS"
-            echo -e " CHECK BLOCK HEIGHT AT https://explorer.zel.network/"
-            echo -e " YOU COULD START YOUR ZELNODE FROM YOUR CONTROL WALLET WHILE IT SYNCS"
-            echo -e "${YELLOW}======================================================================================${NC}"
-            echo
-            $COIN_CLI getinfo
-            sudo chown -R "$USERNAME":"$USERNAME" /home/"$USERNAME"
-            NUM='30'
-            MSG1="${CYAN}Refreshes every 30 seconds while syncing to chain. Refresh loop will stop automatically once it's fully synced.${NC}"
-            MSG2=''
-            spinning_timer
-            if [[ $(wget -nv -qO - https://explorer.zel.network/api/status?q=getInfo | jq '.info.blocks') == $(${COIN_CLI} getinfo | jq '.blocks') ]]; then
-                break
-            fi
-        done
-        check
-        display_banner
-    fi
-}
-
-function update_script() {
-    echo -e "${YELLOW}Creating a script to update binaries for future updates...${NC}"
-    touch /home/"$USERNAME"/update.sh
-    cat << EOF > /home/"$USERNAME"/update.sh
-#!/bin/bash
-COIN_NAME='zelcash'
-COIN_DAEMON='zelcashd'
-COIN_CLI='zelcash-cli'
-COIN_PATH='/usr/local/bin'
-sudo systemctl stop \$COIN_NAME
-\$COIN_CLI stop > /dev/null 2>&1 && sleep 2
-sudo killall \$COIN_DAEMON > /dev/null 2>&1
-sudo killall -s SIGKILL zelbenchd > /dev/null 2>&1
-sudo pacman -Yy
-sudo pacman yuwq --noprogressbar --color=never --noconfirm \$COIN_NAME
-sudo chmod 755 \${COIN_PATH}/\${COIN_NAME}*
-sudo systemctl start \$COIN_NAME > /dev/null 2>&1
-EOF
-    sudo chmod +x update.sh
-}
-
-function check() {
-    echo && echo && echo
-    echo -e "${YELLOW}Running through some checks...${NC}"
-    if pgrep zelcashd > /dev/null; then
-        echo -e "${CHECK_MARK} ${CYAN}${COIN_NAME^} daemon is installed and running${NC}" && sleep 1
-    else
-        echo -e "${X_MARK} ${CYAN}${COIN_NAME^} daemon is not running${NC}" && sleep 1
-    fi
-    if [ -d "/home/$USERNAME/.zcash-params" ]; then
-        echo -e "${CHECK_MARK} ${CYAN}zkSNARK params installed${NC}" && sleep 1
-    else
-        echo -e "${X_MARK} ${CYAN}zkSNARK params not installed${NC}" && sleep 1
-    fi
-    if docker -v > /dev/null; then
-        echo -e "${CHECK_MARK} ${CYAN}Docker is installed${NC}" && sleep 1
-    else
-        echo -e "${X_MARK} ${CYAN}Docker is not install${NC}" && sleep 1
-    fi
-    if groups $USERNAME | grep docker > /dev/null; then
-        echo -e "${CHECK_MARK} ${CYAN}${USERNAME} is in the docker group${NC}" && sleep 1
-    else
-        echo -e "${X_MARK} ${CYAN}${USERNAME} is not in the docker group${NC}" && sleep 1
-    fi
-    if pgrep mongod > /dev/null; then
-        echo -e "${CHECK_MARK} ${CYAN}Mongodb is installed and running${NC}" && sleep 1
-    else
-        echo -e "${X_MARK} ${CYAN}Mongodb is not running or failed to install${NC}" && sleep 1
-    fi
-    if node -v > /dev/null 2>&1; then
-        echo -e "${CHECK_MARK} ${CYAN}Nodejs installed${NC}" && sleep 1
-    else
-        echo -e "${X_MARK} ${CYAN}Nodejs did not install${NC}" && sleep 1
-    fi
-    if [ -d "/home/$USERNAME/zelflux" ]; then
-        echo -e "${CHECK_MARK} ${CYAN}Zelflux installed${NC}" && sleep 1
-    else
-        echo -e "${X_MARK} ${CYAN}Zelflux did not install${NC}" && sleep 1
-    fi
-    if [ -f "/home/$USERNAME/$UPDATE_FILE" ]; then
-        echo -e "${CHECK_MARK} ${CYAN}Update script created${NC}" && sleep 3
-    else
-        echo -e "${X_MARK} ${CYAN}Update script not installed${NC}" && sleep 3
-    fi
-    echo && echo && echo
-}
-
-function display_banner() {
-    echo -e "${BLUE}"
-    figlet -t -k "ZELNODES  &  ZELFLUX"
+    
     echo -e "${NC}"
-    echo -e "${YELLOW}================================================================================================================================"
-    echo -e " PLEASE COMPLETE THE ZELNODE SETUP AND START YOUR ZELNODE${NC}"
-    echo -e "${CYAN} COURTESY OF DK808${NC}"
-    echo
-    echo -e "${YELLOW}   Commands to manage ${COIN_NAME}.${NC}"
-    echo -e "${PIN} ${CYAN}TO START: ${SEA}${COIN_DAEMON}${NC}"
-    echo -e "${PIN} ${CYAN}TO STOP : ${SEA}${COIN_CLI} stop${NC}"
-    echo -e "${PIN} ${CYAN}RPC LIST: ${SEA}${COIN_CLI} help${NC}"
-    echo
-    echo -e "${PIN} ${YELLOW}To update binaries wait for announcement that update is ready then enter:${NC} ${SEA}./${UPDATE_FILE}${NC}"
-    echo
-    echo -e "${YELLOW}   PM2 is now managing Zelflux to start up on reboots.${NC}"
-    pm2 list
-    echo
-    echo -e "${PIN} ${CYAN}To access your frontend to Zelflux enter this in as your url: ${BLINKSEA}${WANIP}:${ZELFRONTPORT}${NC}"
-    echo -e "${YELLOW}================================================================================================================================${NC}"
+    sudo chown -R $USER:$USER /home/$USER/$FLUX_DIR
+    echo -e "${ARROW} ${CYAN}Stopping Kadena Node...${NC}"
+    docker stop zelKadenaChainWebNode > /dev/null 2>&1 && sleep 2
+
+    if [[ -d /home/$USER/$FLUX_DIR/$FLUX_APPS_DIR/zelKadenaChainWebNode/chainweb-db  ]]; then
+        echo -e "${ARROW} ${CYAN}Cleaning...${NC}"
+        rm -rf /home/$USER/$FLUX_DIR/$FLUX_APPS_DIR/zelKadenaChainWebNode/chainweb-db
+    fi
+    
+     mkdir -p /home/$USER/$FLUX_DIR/$FLUX_APPS_DIR/zelKadenaChainWebNode/chainweb-db/0  > /dev/null 2>&1
+
+
+    if [ -f "/home/$USER/$KDA_BOOTSTRAP_ZIPFILE" ]; then
+           
+        echo -e "${ARROW} ${CYAN}Local bootstrap file detected...${NC}"
+	if whiptail --yesno "Do u want check vailidation of archive file before unpack?" 8 60 3>&1 1>&2 2>&3; then
+            check_tar "/home/$USER/$KDA_BOOTSTRAP_ZIPFILE"   
+	else
+	    echo -e "${ARROW} ${CYAN}Vailidation of archive file skipped..${NC}"
+        fi
+	
+    fi
+
+
+    if [ -f "/home/$USER/$KDA_BOOTSTRAP_ZIPFILE" ]; then
+    
+	tar_file_unpack "/home/$USER/$KDA_BOOTSTRAP_ZIPFILE" "/home/$USER/$FLUX_DIR/$FLUX_APPS_DIR/zelKadenaChainWebNode/chainweb-db/0"
+	sleep 2
+        #unzip -o $KDA_BOOTSTRAP_ZIPFILE -d /home/$USER/$FLUX_DIR/$FLUX_APPS_DIR/zelKadenaChainWebNode > /dev/null 2>&1
+	
+    else
+
+        echo -e "${ARROW} ${CYAN}Bootstrap file downloading...${NC}" && sleep 2
+
+        CHOICE=$(
+        whiptail --title "Bootstrap installation" --menu "Choose a method how to get bootstrap file" 10 47 2  \
+            "1)" "Download from source build in script" \
+            "2)" "Download from own source" 3>&2 2>&1 1>&3
+        )
+
+
+            case $CHOICE in
+	    "1)")   
+	         DB_HIGHT=$(curl -s -m 3 https://fluxnodeservice.com/kda_bootstrap.json | jq -r '.block_height')
+		 echo -e "${ARROW} ${CYAN}KDA Bootstrap height: ${GREEN}$DB_HIGHT${NC}"
+		 echo -e "${ARROW} ${CYAN}Downloading File: ${GREEN}$KDA_BOOTSTRAP_ZIP ${NC}"
+       		 wget -O $KDA_BOOTSTRAP_ZIPFILE $KDA_BOOTSTRAP_ZIP -q --show-progress
+		 tar_file_unpack "/home/$USER/$KDA_BOOTSTRAP_ZIPFILE" "/home/$USER/$FLUX_DIR/$FLUX_APPS_DIR/zelKadenaChainWebNode/chainweb-db/0" 
+		 sleep 2
+
+	    ;;
+	    "2)")   
+  		 KDA_BOOTSTRAP_ZIP="$(whiptail --title "Kadena node bootstrap source (*.tar.gz, *.zip file supported)" --inputbox "Enter your URL" 8 72 3>&1 1>&2 2>&3)"
+		 KDA_BOOTSTRAP_ZIPFILE="${KDA_BOOTSTRAP_ZIP##*/}"
+		 echo -e "${ARROW} ${CYAN}Downloading File: ${GREEN}$KDA_BOOTSTRAP_ZIP ${NC}"
+		 wget -O $KDA_BOOTSTRAP_ZIPFILE $KDA_BOOTSTRAP_ZIP -q --show-progress	
+		 
+		 if [[ "$BOOTSTRAP_ZIPFILE" == *".zip"* ]]; then
+ 		    echo -e "${ARROW} ${YELLOW}Unpacking wallet bootstrap please be patient...${NC}"
+                    unzip -o $KDA_BOOTSTRAP_ZIPFILE -d /home/$USER/$FLUX_DIR/$FLUX_APPS_DIR/zelKadenaChainWebNode/chainweb-db/0 > /dev/null 2>&1
+		else	       
+		    tar_file_unpack "/home/$USER/$KDA_BOOTSTRAP_ZIPFILE" "/home/$USER/$FLUX_DIR/$FLUX_APPS_DIR/zelKadenaChainWebNode/chainweb-db/0"
+		   
+		fi		
+		  sleep 2
+	    ;;
+            esac
+
+    fi
+
+    if whiptail --yesno "Would you like remove bootstrap archive file?" 8 60; then
+        rm -rf $KDA_BOOTSTRAP_ZIPFILE
+    fi
+
+    docker start zelKadenaChainWebNode > /dev/null 2>&1
+    NUM='15'
+    MSG1='Starting Kadena Node...'
+    MSG2="${CYAN}........................[${CHECK_MARK}${CYAN}]${NC}"
+    spinning_timer
+    echo -e "" 
+    echo -e "${ARROW} ${CYAN}Kadena Node initial process can take about ~15min. ${NC}"
+    echo -e "" 
+
 }
 
-#
-#end of functions
 
-#run functions
-wipe_clean
-ssh_port
-ip_confirm
-create_swap
-install_packages
-create_conf
-install_zel
-zk_params
-bootstrap
-create_service
-basic_security
-start_daemon
-install_zelflux
-log_rotate
-update_script
-status_loop
+function flux_daemon_bootstrap() {
+
+    echo -e "${GREEN}Module: Restore Flux blockchain from bootstrap${NC}"
+    echo -e "${YELLOW}================================================================${NC}"
+
+    if [[ "$USER" == "root" ]]; then
+    
+        echo -e "${CYAN}You are currently logged in as ${GREEN}$USER${NC}"
+        echo -e "${CYAN}Please switch to the user accont.${NC}"
+        echo -e "${YELLOW}================================================================${NC}"
+        echo -e "${NC}"
+        exit
+    fi
+
+    echo -e "${NC}"
+    echo -e "${ARROW} ${CYAN}Stopping Flux daemon service${NC}"
+    sudo systemctl stop $COIN_NAME > /dev/null 2>&1 && sleep 2
+    sudo fuser -k 16125/tcp > /dev/null 2>&1 && sleep 1
+
+    if [[ -e ~/$CONFIG_DIR/blocks ]] && [[ -e ~/$CONFIG_DIR/chainstate ]]; then
+        echo -e "${ARROW} ${CYAN}Cleaning...${NC}"
+        rm -rf ~/$CONFIG_DIR/blocks ~/$CONFIG_DIR/chainstate ~/$CONFIG_DIR/determ_zelnodes
+    fi
+
+    BOOTSTRAP_ZIPFILE="${BOOTSTRAP_ZIP##*/}"
+    
+    if [ -f "/home/$USER/$BOOTSTRAP_ZIPFILE" ]; then
+    
+     echo -e "${ARROW} ${YELLOW}Local bootstrap file detected...${NC}"
+	
+        if [[ "$BOOTSTRAP_ZIPFILE" == *".zip"* ]]; then	
+            
+            echo -e "${ARROW} ${YELLOW}Checking if zip file is corrupted...${NC}"
+	    
+            if unzip -t $BOOTSTRAP_ZIPFILE | grep 'No errors' > /dev/null 2>&1
+            then
+                echo -e "${ARROW} ${CYAN}Bootstrap zip file is valid.............[${CHECK_MARK}${CYAN}]${NC}"
+            else
+                printf '\e[A\e[K'
+                printf '\e[A\e[K'
+                printf '\e[A\e[K'
+                printf '\e[A\e[K'
+                printf '\e[A\e[K'
+                printf '\e[A\e[K'
+                echo -e "${ARROW} ${CYAN}Bootstrap file is corrupted.............[${X_MARK}${CYAN}]${NC}"
+                rm -rf $BOOTSTRAP_ZIPFILE
+            fi
+	    
+        else	    
+                check_tar "/home/$USER/$BOOTSTRAP_ZIPFILE"
+        fi
+	    
+    fi
+
+
+    if [ -f "/home/$USER/$BOOTSTRAP_ZIPFILE" ]; then
+	
+	
+        if [[ "$BOOTSTRAP_ZIPFILE" == *".zip"* ]]; then
+            echo -e "${ARROW} ${YELLOW}Unpacking wallet bootstrap please be patient...${NC}"
+            unzip -o $BOOTSTRAP_ZIPFILE -d /home/$USER/$CONFIG_DIR > /dev/null 2>&1
+        else
+            tar_file_unpack "/home/$USER/$BOOTSTRAP_ZIPFILE" "/home/$USER/$CONFIG_DIR"
+            sleep 2  
+        fi
+	
+    else
+
+            CHOICE=$(
+            whiptail --title "FLUXNODE INSTALLATION" --menu "Choose a method how to get bootstrap file" 10 47 2  \
+                "1)" "Download from source build in script" \
+                "2)" "Download from own source" 3>&2 2>&1 1>&3
+            )
+
+
+            case $CHOICE in
+	    "1)")   
+	        
+	        DB_HIGHT=$(curl -s -m 3 https://fluxnodeservice.com/daemon_bootstrap.json | jq -r '.block_height')
+		echo -e "${ARROW} ${CYAN}Flux daemon bootstrap height: ${GREEN}$DB_HIGHT${NC}"
+	 	echo -e "${ARROW} ${YELLOW}Downloading File: ${GREEN}$BOOTSTRAP_ZIP ${NC}"
+       		wget -O $BOOTSTRAP_ZIPFILE $BOOTSTRAP_ZIP -q --show-progress
+	        tar_file_unpack "/home/$USER/$BOOTSTRAP_ZIPFILE" "/home/$USER/$CONFIG_DIR" 
+		sleep 2
+
+
+
+	    ;;
+	    "2)")   
+  		BOOTSTRAP_ZIP="$(whiptail --title "Flux daemon bootstrap setup" --inputbox "Enter your URL (zip, tar.gz)" 8 72 3>&1 1>&2 2>&3)"
+		echo -e "${ARROW} ${YELLOW}Downloading File: ${GREEN}$BOOTSTRAP_ZIP ${NC}"		
+		BOOTSTRAP_ZIPFILE="${BOOTSTRAP_ZIP##*/}"
+		wget -O $BOOTSTRAP_ZIPFILE $BOOTSTRAP_ZIP -q --show-progress
+		
+	        if [[ "$BOOTSTRAP_ZIPFILE" == *".zip"* ]]; then
+ 		    echo -e "${ARROW} ${YELLOW}Unpacking wallet bootstrap please be patient...${NC}"
+                    unzip -o $BOOTSTRAP_ZIPFILE -d /home/$USER/$CONFIG_DIR > /dev/null 2>&1
+		else	       
+		    tar_file_unpack "/home/$USER/$BOOTSTRAP_ZIPFILE" "/home/$USER/$CONFIG_DIR"
+		    sleep 2
+		fi
+	    ;;
+            esac
+
+    fi
+    
+    
+    if whiptail --yesno "Would you like remove bootstrap archive file?" 8 60; then
+        rm -rf $BOOTSTRAP_ZIPFILE
+    fi
+
+    sudo systemctl start $COIN_NAME  > /dev/null 2>&1 && sleep 2
+    NUM='35'
+    MSG1='Starting Flux daemon service...'
+    MSG2="${CYAN}........................[${CHECK_MARK}${CYAN}]${NC}"
+    spinning_timer
+    echo -e "" && echo -e ""
+}
+
+function mongodb_bootstrap(){
+
+echo -e "${GREEN}Module: Restore Flux MongoDB datatable from bootstrap (explorer only)${NC}"
+echo -e "${YELLOW}================================================================${NC}"
+
+if [[ "$USER" == "root" ]]; then
+    echo -e "${CYAN}You are currently logged in as ${GREEN}$USER${NC}"
+    echo -e "${CYAN}Please switch to the user accont.${NC}"
+    echo -e "${YELLOW}================================================================${NC}"
+    echo -e "${NC}"
+    exit
+fi
+
+sudo rm /home/$USER/fluxdb_dump.tar.gz  > /dev/null 2>&1
+sudo rm /home/$USER/$BOOTSTRAP_ZIPFILE_MONGOD  > /dev/null 2>&1
+
+if ! pm2 -v > /dev/null 2>&1; then
+ 
+   pm2_install 
+
+   if [[ "$PM2_INSTALL" == "0" ]]; then
+    exit
+   fi
+
+fi
+
+WANIP=$(wget http://ipecho.net/plain -O - -q)
+DB_HIGHT=$(curl -s -m 5 https://fluxnodeservice.com/mongodb_bootstrap.json | jq -r '.block_height')
+BLOCKHIGHT=$(curl -s -m 5 http://"$WANIP":16127/explorer/scannedheight | jq '.data.generalScannedHeight')	
+FORCE_BOOTSTRAP=0
+
+if [[ "$DB_HIGHT" == "" ]]; then
+    echo -e "${ARROW} ${CYAN}MongoDB bootstrap server offline...${NC}"
+    string_limit_x_mark "Operation aborted....................."
+    exit
+fi
+
+
+if [[ "$BLOCKHIGHT" == ""  ||  "$BLOCKHIGHT" == "null" ]]; then
+
+    if whiptail --yesno "Local Explorer not respondin...Would you like force bootstrap installation?" 8 60; then   
+        FORCE_BOOTSTRAP=1		
+    else
+        string_limit_x_mark "Local Explorer not responding........."
+        string_limit_x_mark "Operation aborted....................."	
+        echo -e ""
+        exit  
+    fi
+
+fi
+   
+ if [[ "$FORCE_BOOTSTRAP" != "1" ]]; then	
+
+    if [[ "$BLOCKHIGHT" == "null" ]]; then
+
+           message=$(curl -s -m 5 http://"$WANIP":16127/explorer/scannedheight | jq -r .data.message)
+        
+           if whiptail --yesno "Flux explorer error noticed...Would you like force bootstrap installation?" 8 60; then 
+              FORCE_BOOTSTRAP=1
+           else
+	      echo -e "${ARROW} ${CYAN}Flux explorer error: ${RED}$message${NC}"
+              string_limit_x_mark "Operation aborted....................."
+              echo -e ""
+	      exit
+	   fi  
+      fi
+ fi
+
+
+if [[ "$BLOCKHIGHT" != "" && "$BLOCKHIGHT" != "null" ]]; then
+
+        if [[ "$BLOCKHIGHT" -gt "$DB_HIGHT" ]]; then
+	  
+	    if whiptail --yesno "Datatable is out of date....Would you like force bootstrap installation?" 8 60; then   
+                FORCE_BOOTSTRAP=1		
+            else
+                echo -e "${ARROW} ${CYAN}Current Node block hight ${RED}$BLOCKHIGHT${CYAN} > Bootstrap block hight ${RED}$DB_HIGHT${CYAN}. Datatable is out of date.${NC}"
+	        string_limit_x_mark "Operation aborted....................."
+                echo -e ""
+	        exit
+            fi
+	  
+        fi	         
+fi
+
+
+echo -e "${ARROW} ${CYAN}IP: ${RED}$WANIP${NC}"
+
+if [[ "$FORCE_BOOTSTRAP" != "1" ]]; then
+    echo -e "${ARROW} ${CYAN}Node block hight: ${GREEN}$BLOCKHIGHT${NC}"
+fi
+
+echo -e "${ARROW} ${CYAN}Bootstrap block hight: ${GREEN}$DB_HIGHT${NC}"
+echo -e ""
+
+
+echo -e "${ARROW} ${CYAN}Downloading File: ${GREEN}$BOOTSTRAP_URL_MONGOD${NC}"
+wget $BOOTSTRAP_URL_MONGOD -q --show-progress 
+echo -e "${ARROW} ${CYAN}Unpacking...${NC}"
+tar xvf $BOOTSTRAP_ZIPFILE_MONGOD -C /home/$USER > /dev/null 2>&1 && sleep 1
+echo -e "${ARROW} ${CYAN}Stoping Flux...${NC}"
+pm2 stop flux > /dev/null 2>&1
+echo -e "${ARROW} ${CYAN}Importing mongodb datatable...${NC}"
+mongorestore --port 27017 --db zelcashdata /home/$USER/dump/zelcashdata --drop > /dev/null 2>&1
+echo -e "${ARROW} ${CYAN}Cleaning...${NC}"
+sudo rm -rf /home/$USER/dump > /dev/null 2>&1 && sleep 1
+sudo rm -rf $BOOTSTRAP_ZIPFILE_MONGOD > /dev/null 2>&1  && sleep 1
+pm2 start flux > /dev/null 2>&1
+pm2 save > /dev/null 2>&1
+
+NUM='120'
+MSG1='Flux starting...'
+MSG2="${CYAN}.....................[${CHECK_MARK}${CYAN}]${NC}"
+spinning_timer
+echo
+
+#BLOCKHIGHT_AFTER_BOOTSTRAP=$(curl -s -m 3 http://"$WANIP":16127/explorer/scannedheight | jq '.data.generalScannedHeight')
+BLOCKHIGHT_AFTER_BOOTSTRAP=$(mongoexport -d zelcashdata -c scannedheight  --jsonArray --pretty --quiet | jq -r .[].generalScannedHeight)	
+ if [[ "$BLOCKHIGHT_AFTER_BOOTSTRAP" != "" && "$BLOCKHIGHT_AFTER_BOOTSTRAP" == "null" ]]; then
+ 
+             echo -e "${ARROW} ${CYAN}Node block hight after restored: ${GREEN}$BLOCKHIGHT_AFTER_BOOTSTRAP${NC}"
+	    
+	     if [[ "$BLOCKHIGHT_AFTER_BOOTSTRAP" -ge  "$DB_HIGHT" ]]; then
+
+                 string_limit_check_mark "MongoDB bootstrap installed successful.................................."
+                 echo -e ""
+             else
+	     
+	         if [[ "$FORCE_BOOTSTRAP" == "1" ]]; then
+                    string_limit_check_mark "MongoDB bootstrap installed successful.................................."
+                    echo -e ""
+		 else
+		    string_limit_x_mark "MongoDB bootstrap installation failed.................................."
+                    echo -e ""
+		 fi
+		 
+             fi
+ else
+ 
+     string_limit_x_mark "MongoDB bootstrap installation failed.................................."
+     echo -e ""
+ 
+ fi
+	
+	
+}
+
+function install_kernel(){
+
+
+echo -e "${GREEN}Module: Install Linux Kernel 5.X for Ubuntu 18.04${NC}"
+echo -e "${YELLOW}================================================================${NC}"
+
+if [[ "$USER" == "root" ]]
+then
+    echo -e "${CYAN}You are currently logged in as ${GREEN}$USER${NC}"
+    echo -e "${CYAN}Please switch to the user accont.${NC}"
+    echo -e "${YELLOW}================================================================${NC}"
+    echo -e "${NC}"
+    exit
+fi
+
+echo -e "${NC}"
+echo -e "${YELLOW}Installing Linux Kernel 5.x${NC}"
+sudo apt-get install --install-recommends linux-generic-hwe-18.04 -y
+read -p "Would you like to reboot pc Y/N?" -n 1 -r
+echo -e "${NC}"
+if [[ $REPLY =~ ^[Yy]$ ]]
+then
+sudo reboot -n
+fi
+
+}
+
+function analyzer_and_fixer(){
+
+echo -e "${GREEN}Module: FluxNode analyzer and fixer${NC}"
+echo -e "${YELLOW}================================================================${NC}"
+
+if [[ "$USER" == "root" ]]
+then
+    echo -e "${CYAN}You are currently logged in as ${GREEN}$USER${NC}"
+    echo -e "${CYAN}Please switch to the user accont.${NC}"
+    echo -e "${YELLOW}================================================================${NC}"
+    echo -e "${NC}"
+    exit
+fi
+
+bash -i <(curl -s https://raw.githubusercontent.com/XK4MiLX/zelnode/master/nodeanalizerandfixer.sh)
+
+}
+
+ function insertAfter
+{
+   local file="$1" line="$2" newText="$3"
+   sudo sed -i -e "/$line/a"$'\\\n'"$newText"$'\n' "$file"
+}
+
+function fix_lxc_config(){
+
+echo -e "${GREEN}Module: Fix your lxc.conf file on host${NC}"
+echo -e "${YELLOW}================================================================${NC}"
+echo -e ""
+
+continer_name="$(whiptail --title "ZELNODE MULTITOOLBOX $dversion" --inputbox "Enter your LXC continer name" 8 72 3>&1 1>&2 2>&3)"
+echo -e "${YELLOW}================================================================${NC}"
+if [[ $(grep -w "features: mount=fuse,nesting=1" /etc/pve/lxc/$continer_name.conf) && $(grep -w "lxc.mount.entry: /dev/fuse dev/fuse none bind,create=file 0 0" /etc/pve/lxc/$continer_name.conf) ]] 
+then
+echo -e "${CHECK_MARK} ${CYAN}LXC configurate file $continer_name.conf [OK]${NC}"
+fi
+
+insertAfter "/etc/pve/lxc/$continer_name.conf" "cores" "features: mount=fuse,nesting=1"
+sudo bash -c "echo 'lxc.mount.entry: /dev/fuse dev/fuse none bind,create=file 0 0' >>/etc/pve/lxc/$continer_name.conf"
+sudo bash -c "echo 'lxc.cap.drop:' >>/etc/pve/lxc/$continer_name.conf"
+sudo bash -c "echo 'lxc.cap.drop: mac_override sys_time sys_module sys_rawio' >>/etc/pve/lxc/$continer_name.conf"
+sudo bash -c "echo 'lxc.apparmor.profile: unconfined' >>/etc/pve/lxc/$continer_name.conf"
+sudo bash -c "echo 'lxc.cgroup.devices.allow: a' >>/etc/pve/lxc/$continer_name.conf"
+sudo bash -c "echo 'lxc.cap.drop:' >>/etc/pve/lxc/$continer_name.conf"   
+
+if [[ $(grep -w "features: mount=fuse,nesting=1" /etc/pve/lxc/$continer_name.conf) && $(grep -w "lxc.mount.entry: /dev/fuse dev/fuse none bind,create=file 0 0" /etc/pve/lxc/$continer_name.conf) ]] 
+then
+echo -e "${CHECK_MARK} ${CYAN}LXC configurate file $continer_name.conf [FiXED]${NC}"
+else
+echo -e "${X_MARK} ${CYAN}LXC configurate file $continer_name.conf fix [Failed]${NC}"
+fi  
+
+}
+
+function install_node(){
+
+echo -e "${GREEN}Module: Install FluxNode${NC}"
+echo -e "${YELLOW}================================================================${NC}"
+
+if [[ "$USER" == "root" ]]
+then
+    echo -e "${CYAN}You are currently logged in as ${GREEN}$USER${NC}"
+    echo -e "${CYAN}Please switch to the user accont.${NC}"
+    echo -e "${YELLOW}================================================================${NC}"
+    echo -e "${NC}"
+    exit
+fi
+
+if [[ $(lsb_release -d) != *Debian* && $(lsb_release -d) != *Ubuntu* ]]; then
+
+   echo -e "${WORNING} ${CYAN}ERROR: ${RED}OS version not supported${NC}"
+   echo -e "${WORNING} ${CYAN}Installation stopped...${NC}"
+   echo
+   exit
+fi
+
+
+if docker run hello-world > /dev/null 2>&1
+then
+echo -e ""
+else
+echo -e "${WORNING}${CYAN}Docker is not working correct or is not installed.${NC}"
+exit
+fi
+
+bash -i <(curl -s https://raw.githubusercontent.com/XK4MiLX/zelnode/master/install_pro.sh)
+
+
+}
+
+function install_docker(){
+
+echo -e "${GREEN}Module: Install Docker${NC}"
+echo -e "${YELLOW}================================================================${NC}"
+
+if [[ "$USER" != "root" ]]
+then
+    echo -e "${CYAN}You are currently logged in as ${GREEN}$USER${NC}"
+    echo -e "${CYAN}Please switch to the root accont.${NC}"
+    echo -e "${YELLOW}================================================================${NC}"
+    echo -e "${NC}"
+    exit
+fi
+
+if [[ $(lsb_release -d) != *Debian* && $(lsb_release -d) != *Ubuntu* ]]; then
+
+    echo -e "${WORNING} ${CYAN}ERROR: ${RED}OS version not supported${NC}"
+    echo -e "${WORNING} ${CYAN}Installation stopped...${NC}"
+    echo
+    exit
+
+fi
+
+usernew="$(whiptail --title "MULTITOOLBOX $dversion" --inputbox "Enter your username" 8 72 3>&1 1>&2 2>&3)"
+
+echo -e "${ARROW} ${YELLOW}Creating new user...${NC}"
+adduser --gecos "" "$usernew" 
+usermod -aG sudo "$usernew" > /dev/null 2>&1  
+echo -e "${ARROW} ${YELLOW}Update and upgrade system...${NC}"
+apt update -y && apt upgrade -y
+echo -e "${ARROW} ${YELLOW}Installing docker...${NC}"
+echo -e "${ARROW} ${CYAN}Architecture: ${GREEN}$(dpkg --print-architecture)${NC}"
+           
+if [[ -f /usr/share/keyrings/docker-archive-keyring.gpg ]]; then
+    sudo rm /usr/share/keyrings/docker-archive-keyring.gpg > /dev/null 2>&1
+fi
+
+if [[ -f /etc/apt/sources.list.d/docker.list ]]; then
+    sudo rm /etc/apt/sources.list.d/docker.list > /dev/null 2>&1 
+fi
+
+
+if [[ $(lsb_release -d) = *Debian* ]]
+then
+
+sudo apt-get remove docker docker-engine docker.io containerd runc -y > /dev/null 2>&1 
+sudo apt-get update -y  > /dev/null 2>&1
+sudo apt-get -y install apt-transport-https ca-certificates > /dev/null 2>&1 
+sudo apt-get -y install curl gnupg-agent software-properties-common > /dev/null 2>&1
+#curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add - > /dev/null 2>&1
+#sudo add-apt-repository -y "deb [arch=amd64,arm64] https://download.docker.com/linux/debian $(lsb_release -cs) stable" > /dev/null 2>&1
+curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg > /dev/null 2>&1
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null 2>&1
+sudo apt-get update -y  > /dev/null 2>&1
+sudo apt-get install docker-ce docker-ce-cli containerd.io -y > /dev/null 2>&1  
+
+else
+
+sudo apt-get remove docker docker-engine docker.io containerd runc -y > /dev/null 2>&1 
+sudo apt-get -y install apt-transport-https ca-certificates > /dev/null 2>&1  
+sudo apt-get -y install curl gnupg-agent software-properties-common > /dev/null 2>&1  
+
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg > /dev/null 2>&1
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null 2>&1
+#curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add - > /dev/null 2>&1
+#sudo add-apt-repository -y "deb [arch=amd64,arm64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /dev/null 2>&1
+sudo apt-get update -y  > /dev/null 2>&1
+sudo apt-get install docker-ce docker-ce-cli containerd.io -y > /dev/null 2>&1
+
+fi
+
+# echo -e "${YELLOW}Creating docker group..${NC}"
+# groupadd docker
+echo -e "${ARROW} ${YELLOW}Adding $usernew to docker group...${NC}"
+adduser "$usernew" docker 
+echo -e "${NC}"
+echo -e "${YELLOW}=====================================================${NC}"
+echo -e "${YELLOW}Running through some checks...${NC}"
+echo -e "${YELLOW}=====================================================${NC}"
+
+if sudo docker run hello-world > /dev/null 2>&1  
+then
+	echo -e "${CHECK_MARK} ${CYAN}Docker is installed${NC}"
+else
+	echo -e "${X_MARK} ${CYAN}Docker did not installed${NC}"
+fi
+
+if [[ $(getent group docker | grep "$usernew") ]] 
+then
+	echo -e "${CHECK_MARK} ${CYAN}User $usernew is member of 'docker'${NC}"
+else
+	echo -e "${X_MARK} ${CYAN}User $usernew is not member of 'docker'${NC}"
+fi
+
+echo -e "${YELLOW}=====================================================${NC}"
+echo -e "${NC}"
+read -p "Would you like switch to user account Y/N?" -n 1 -r
+echo -e "${NC}"
+if [[ $REPLY =~ ^[Yy]$ ]]
+then
+su - $usernew
+fi
+
+}
+
+function daemon_reconfiguration()
+{
+
+echo -e "${GREEN}Module: Flux Daemon Reconfiguration${NC}"
+echo -e "${YELLOW}================================================================${NC}"
+
+if [[ "$USER" == "root" ]]
+then
+    echo -e "${CYAN}You are currently logged in as ${GREEN}$USER${NC}"
+    echo -e "${CYAN}Please switch to the user accont.${NC}"
+    echo -e "${YELLOW}================================================================${NC}"
+    echo -e "${NC}"
+    exit
+fi
+
+echo
+echo -e "${ARROW} ${YELLOW}Fill in all the fields that you want to replace${NC}"
+sleep 4
+skip_change='4'
+zelnodeprivkey="$(whiptail --title "Flux daemon reconfiguration" --inputbox "Enter your FluxNode Private Key generated by your Zelcore" 8 72 3>&1 1>&2 2>&3)"
+sleep 1
+zelnodeoutpoint="$(whiptail --title "Flux daemon reconfiguration" --inputbox "Enter your FluxNode Output TX ID" 8 72 3>&1 1>&2 2>&3)"
+sleep 1
+zelnodeindex="$(whiptail --title "Flux daemon reconfiguration" --inputbox "Enter your FluxNode Output Index" 8 60 3>&1 1>&2 2>&3)"
+sleep 1
+externalip="$(whiptail --title "Flux daemon reconfiguration" --inputbox "Enter your FluxNode IP" 8 60 3>&1 1>&2 2>&3)"
+sleep 1
+
+if [[ "$zelnodeprivkey" == "" ]]; then
+skip_change=$((skip_change-1))
+echo -e "${ARROW} ${CYAN}Replace FluxNode privkey skipped....................[${CHECK_MARK}${CYAN}]${NC}"
+fi
+
+if [[ "$zelnodeoutpoint" == "" ]]; then
+skip_change=$((skip_change-1))
+echo -e "${ARROW} ${CYAN}Replace FluxNode outpoint skipped ..................[${CHECK_MARK}${CYAN}]${NC}"
+fi
+
+if [[ "$zelnodeindex" == "" ]]; then
+skip_change=$((skip_change-1))
+echo -e "${ARROW} ${CYAN}Replace FluxNode index skipped......................[${CHECK_MARK}${CYAN}]${NC}"
+fi
+
+if [[ "$externalip" == "" ]]; then
+skip_change=$((skip_change-1))
+echo -e "${ARROW} ${CYAN}Replace FluxNode IP skipped.........................[${CHECK_MARK}${CYAN}]${NC}"
+fi
+
+
+if [[ "$skip_change" == "0" ]]; then
+echo -e "${ARROW} ${YELLOW}All fields are empty changes skipped...${NC}"
+echo
+exit
+fi
+
+echo -e "${ARROW} ${CYAN}Stopping Flux daemon serivce...${NC}"
+sudo systemctl stop $COIN_NAME  > /dev/null 2>&1 && sleep 2
+sudo fuser -k 16125/tcp > /dev/null 2>&1
+
+
+if [[ "$zelnodeprivkey" != "" ]]; then
+
+if [[ "zelnodeprivkey=$zelnodeprivkey" == $(grep -w zelnodeprivkey ~/$CONFIG_DIR/$CONFIG_FILE) ]]; then
+echo -e "${ARROW} ${CYAN}Replace FluxNode privkey skipped....................[${CHECK_MARK}${CYAN}]${NC}"
+        else
+        sed -i "s/$(grep -e zelnodeprivkey ~/$CONFIG_DIR/$CONFIG_FILE)/zelnodeprivkey=$zelnodeprivkey/" ~/$CONFIG_DIR/$CONFIG_FILE
+                if [[ "zelnodeprivkey=$zelnodeprivkey" == $(grep -w zelnodeprivkey ~/$CONFIG_DIR/$CONFIG_FILE) ]]; then
+                        echo -e "${ARROW} ${CYAN}FluxNode privkey replaced successful................[${CHECK_MARK}${CYAN}]${NC}"			
+                fi
+fi
+
+fi
+
+if [[ "$zelnodeoutpoint" != "" ]]; then
+
+if [[ "zelnodeoutpoint=$zelnodeoutpoint" == $(grep -w zelnodeoutpoint ~/$CONFIG_DIR/$CONFIG_FILE) ]]; then
+echo -e "${ARROW} ${CYAN}Replace FluxNode outpoint skipped ..................[${CHECK_MARK}${CYAN}]${NC}"
+        else
+        sed -i "s/$(grep -e zelnodeoutpoint ~/$CONFIG_DIR/$CONFIG_FILE)/zelnodeoutpoint=$zelnodeoutpoint/" ~/$CONFIG_DIR/$CONFIG_FILE
+                if [[ "zelnodeoutpoint=$zelnodeoutpoint" == $(grep -w zelnodeoutpoint ~/$CONFIG_DIR/$CONFIG_FILE) ]]; then
+                        echo -e "${ARROW} ${CYAN}FluxNode outpoint replaced successful...............[${CHECK_MARK}${CYAN}]${NC}"
+                fi
+fi
+
+fi
+
+if [[ "$zelnodeindex" != "" ]]; then
+
+if [[ "zelnodeindex=$zelnodeindex" == $(grep -w zelnodeindex ~/$CONFIG_DIR/$CONFIG_FILE) ]]; then
+echo -e "${ARROW} ${CYAN}Replace FluxNode index skipped......................[${CHECK_MARK}${CYAN}]${NC}"
+        else
+        sed -i "s/$(grep -w zelnodeindex ~/$CONFIG_DIR/$CONFIG_FILE)/zelnodeindex=$zelnodeindex/" ~/$CONFIG_DIR/$CONFIG_FILE
+                if [[ "zelnodeindex=$zelnodeindex" == $(grep -w zelnodeindex ~/$CONFIG_DIR/$CONFIG_FILE) ]]; then
+                        echo -e "${ARROW} ${CYAN}FluxNode index replaced successful..................[${CHECK_MARK}${CYAN}]${NC}"
+			
+                fi
+fi
+
+fi
+
+if [[ "$externalip" != "" ]]; then
+
+if [[ "externalip=$externalip" == $(grep -w externalip ~/$CONFIG_DIR/$CONFIG_FILE) ]]; then
+echo -e "${ARROW} ${CYAN}Replace FluxNode IP skipped.........................[${CHECK_MARK}${CYAN}]${NC}"
+        else
+        sed -i "s/$(grep -w externalip ~/$CONFIG_DIR/$CONFIG_FILE)/externalip=$externalip/" ~/$CONFIG_DIR/$CONFIG_FILE
+                if [[ "externalip=$externalip" == $(grep -w externalip ~/$CONFIG_DIR/$CONFIG_FILE) ]]; then
+                        echo -e "${ARROW} ${CYAN}FluxNode IP replaced successful.....................[${CHECK_MARK}${CYAN}]${NC}"
+			
+                fi
+fi
+fi
+
+sudo systemctl start $COIN_NAME  > /dev/null 2>&1 && sleep 2
+NUM='35'
+MSG1='Restarting daemon serivce...'
+MSG2="${CYAN}........................[${CHECK_MARK}${CYAN}]${NC}"
+spinning_timer
+echo -e "" && echo -e ""
+
+}
+
+
+
+
+if ! figlet -v > /dev/null 2>&1
+then
+sudo apt-get update -y > /dev/null 2>&1
+sudo apt-get install -y figlet > /dev/null 2>&1
+fi
+
+if ! pv -V > /dev/null 2>&1
+then
+sudo apt-get install -y pv > /dev/null 2>&1
+fi
+
+if ! gzip -V > /dev/null 2>&1
+then
+sudo apt-get install -y gzip > /dev/null 2>&1
+fi
+
+if ! zip -v > /dev/null 2>&1
+then
+sudo apt-get install -y zip > /dev/null 2>&1
+fi
+
+
+
+clear
+sleep 1
+echo -e "${BLUE}"
+figlet -f slant "Multitoolbox"
+echo -e "${YELLOW}================================================================${NC}"
+echo -e "${GREEN}Version: $dversion${NC}"
+echo -e "${GREEN}OS: Ubuntu 16/18/19/20, Debian 9/10 ${NC}"
+echo -e "${GREEN}Created by: XK4MiLX from Flux's team${NC}"
+echo -e "${GREEN}Special thanks to dk808, CryptoWrench && jriggs28${NC}"
+echo -e "${YELLOW}================================================================${NC}"
+echo -e "${CYAN}1  - Install Docker${NC}"
+echo -e "${CYAN}2  - Install FluxNode${NC}"
+echo -e "${CYAN}3  - FluxNode analyzer and fixer${NC}"
+echo -e "${CYAN}4  - Install watchdog for FluxNode${NC}"
+echo -e "${CYAN}5  - Restore Flux MongoDB datatable from bootstrap${NC}"
+echo -e "${CYAN}6  - Restore Flux blockchain from bootstrap${NC}"
+echo -e "${CYAN}7  - Create FluxNode installation config file${NC}"
+echo -e "${CYAN}8  - Re-install Flux${NC}"
+echo -e "${CYAN}9  - Flux Daemon Reconfiguration${NC}"
+echo -e "${CYAN}10 - Restore Kadena node blockchain from bootstrap${NC}"
+#echo -e "${CYAN}8 - Install Linux Kernel 5.X for Ubuntu 18.04${NC}"
+echo -e "${YELLOW}================================================================${NC}"
+
+read -rp "Pick an option and hit ENTER: "
+
+  case "$REPLY" in
+
+ 1)  
+    clear
+    sleep 1
+    install_docker
+ ;;
+ 2) 
+    clear
+    sleep 1
+    install_node
+ ;;
+ 3)     
+    clear
+    sleep 1
+    analyzer_and_fixer
+ ;;
+  4)  
+    clear
+    sleep 1
+    install_watchdog   
+ ;;
+ 
+ 5)  
+    clear
+    sleep 1
+    mongodb_bootstrap     
+ ;;
+  6)  
+    clear
+    sleep 1
+    flux_daemon_bootstrap     
+ ;; 
+  7)
+    clear
+    sleep 1
+    create_config
+ ;;
+   8)
+    clear
+    sleep 1
+    install_flux
+ ;;
+ 9)
+   clear
+   sleep 1
+   daemon_reconfiguration
+   
+ ;;
+ 
+  10)
+   clear
+   sleep 1
+   kda_bootstrap
+   
+ ;;
+ 
+# 8)
+    #clear
+   # sleep 1
+    #install_kernel
+# ;;
+
+    esac
