@@ -279,7 +279,7 @@ fi
  pm2 save > /dev/null 2>&1
  fi
  
-docker_check=$(docker container ls -a | grep 'zelcash' | grep -Eo "^[0-9a-z]{8,}\b" | wc -l)
+# docker_check=$(ls -a | grep 'zelcash' | grep -Eo "^[0-9a-z]{8,}\b" | wc -l)
 resource_check=$(df | egrep 'flux' | awk '{ print $1}' | wc -l)
 mongod_check=$(mongoexport -d localzelapps -c zelappsinformation --jsonArray --pretty --quiet  | jq -r .[].name | head -n1)
 
@@ -287,19 +287,6 @@ if [[ "$mongod_check" != "" && "$mongod_check" != "null" ]]; then
 echo -e "${ARROW} ${YELLOW}Detected Flux MongoDB local apps collection ...${NC}" && sleep 1
 echo -e "${ARROW} ${CYAN}Cleaning MongoDB Flux local apps collection...${NC}" && sleep 1
 echo "db.zelappsinformation.drop()" | mongo localzelapps > /dev/null 2>&1
-fi
-
-if [[ $docker_check != 0 ]]; then
-echo -e "${ARROW} ${YELLOW}Detected running docker container...${NC}" && sleep 1
-echo -e "${ARROW} ${CYAN}Removing containers...${NC}"
-sudo aa-remove-unknown && sudo service docker restart > /dev/null 2>&1 && sleep 2 
-sleep 5
-#docker ps | grep -Eo "^[0-9a-z]{8,}\b" |
-docker container ls -a | grep 'zelcash' | grep -Eo "^[0-9a-z]{8,}\b" |
-while read line; do
-sudo docker stop $line > /dev/null 2>&1 && sleep 2 
-sudo docker rm $line > /dev/null 2>&1 && sleep 2 
-done
 fi
 
 if [[ $resource_check != 0 ]]; then
@@ -711,7 +698,7 @@ function kda_bootstrap() {
     echo -e "${NC}"
     sudo chown -R $USER:$USER /home/$USER/$FLUX_DIR
     echo -e "${ARROW} ${CYAN}Stopping Kadena Node...${NC}"
-    docker stop zelKadenaChainWebNode > /dev/null 2>&1 && sleep 2
+    pkill  zelKadenaChainWebNode > /dev/null 2>&1 && sleep 2
 
     if [[ -d /home/$USER/$FLUX_DIR/$FLUX_APPS_DIR/zelKadenaChainWebNode/chainweb-db  ]]; then
         echo -e "${ARROW} ${CYAN}Cleaning...${NC}"
@@ -783,7 +770,7 @@ function kda_bootstrap() {
         rm -rf $KDA_BOOTSTRAP_ZIPFILE
     fi
 
-    docker start zelKadenaChainWebNode > /dev/null 2>&1
+    zelKadenaChainWebNode > /dev/null 2>&1
     NUM='15'
     MSG1='Starting Kadena Node...'
     MSG2="${CYAN}........................[${CHECK_MARK}${CYAN}]${NC}"
@@ -1156,130 +1143,16 @@ then
     exit
 fi
 
-if [[ $(lsb_release -d) != *Debian* && $(lsb_release -d) != *Ubuntu* ]]; then
+# if [[ $(lsb_release -d) != *Debian* && $(lsb_release -d) != *Ubuntu* ]]; then
 
-   echo -e "${WORNING} ${CYAN}ERROR: ${RED}OS version not supported${NC}"
-   echo -e "${WORNING} ${CYAN}Installation stopped...${NC}"
-   echo
-   exit
-fi
-
-
-if docker run hello-world > /dev/null 2>&1
-then
-echo -e ""
-else
-echo -e "${WORNING}${CYAN}Docker is not working correct or is not installed.${NC}"
-exit
-fi
+#    echo -e "${WORNING} ${CYAN}ERROR: ${RED}OS version not supported${NC}"
+#    echo -e "${WORNING} ${CYAN}Installation stopped...${NC}"
+#    echo
+#    exit
+# fi
 
 bash -i <(curl -s https://raw.githubusercontent.com/XK4MiLX/zelnode/master/install_pro.sh)
 
-
-}
-
-function install_docker(){
-
-echo -e "${GREEN}Module: Install Docker${NC}"
-echo -e "${YELLOW}================================================================${NC}"
-
-if [[ "$USER" != "root" ]]
-then
-    echo -e "${CYAN}You are currently logged in as ${GREEN}$USER${NC}"
-    echo -e "${CYAN}Please switch to the root accont.${NC}"
-    echo -e "${YELLOW}================================================================${NC}"
-    echo -e "${NC}"
-    exit
-fi
-
-if [[ $(lsb_release -d) != *Debian* && $(lsb_release -d) != *Ubuntu* ]]; then
-
-    echo -e "${WORNING} ${CYAN}ERROR: ${RED}OS version not supported${NC}"
-    echo -e "${WORNING} ${CYAN}Installation stopped...${NC}"
-    echo
-    exit
-
-fi
-
-usernew="$(whiptail --title "MULTITOOLBOX $dversion" --inputbox "Enter your username" 8 72 3>&1 1>&2 2>&3)"
-
-echo -e "${ARROW} ${YELLOW}Creating new user...${NC}"
-adduser --gecos "" "$usernew" 
-usermod -aG sudo "$usernew" > /dev/null 2>&1  
-echo -e "${ARROW} ${YELLOW}Update and upgrade system...${NC}"
-apt update -y && apt upgrade -y
-echo -e "${ARROW} ${YELLOW}Installing docker...${NC}"
-echo -e "${ARROW} ${CYAN}Architecture: ${GREEN}$(dpkg --print-architecture)${NC}"
-           
-if [[ -f /usr/share/keyrings/docker-archive-keyring.gpg ]]; then
-    sudo rm /usr/share/keyrings/docker-archive-keyring.gpg > /dev/null 2>&1
-fi
-
-if [[ -f /etc/apt/sources.list.d/docker.list ]]; then
-    sudo rm /etc/apt/sources.list.d/docker.list > /dev/null 2>&1 
-fi
-
-
-if [[ $(lsb_release -d) = *Debian* ]]
-then
-
-sudo apt-get remove docker docker-engine docker.io containerd runc -y > /dev/null 2>&1 
-sudo apt-get update -y  > /dev/null 2>&1
-sudo apt-get -y install apt-transport-https ca-certificates > /dev/null 2>&1 
-sudo apt-get -y install curl gnupg-agent software-properties-common > /dev/null 2>&1
-#curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add - > /dev/null 2>&1
-#sudo add-apt-repository -y "deb [arch=amd64,arm64] https://download.docker.com/linux/debian $(lsb_release -cs) stable" > /dev/null 2>&1
-curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg > /dev/null 2>&1
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null 2>&1
-sudo apt-get update -y  > /dev/null 2>&1
-sudo apt-get install docker-ce docker-ce-cli containerd.io -y > /dev/null 2>&1  
-
-else
-
-sudo apt-get remove docker docker-engine docker.io containerd runc -y > /dev/null 2>&1 
-sudo apt-get -y install apt-transport-https ca-certificates > /dev/null 2>&1  
-sudo apt-get -y install curl gnupg-agent software-properties-common > /dev/null 2>&1  
-
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg > /dev/null 2>&1
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null 2>&1
-#curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add - > /dev/null 2>&1
-#sudo add-apt-repository -y "deb [arch=amd64,arm64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /dev/null 2>&1
-sudo apt-get update -y  > /dev/null 2>&1
-sudo apt-get install docker-ce docker-ce-cli containerd.io -y > /dev/null 2>&1
-
-fi
-
-# echo -e "${YELLOW}Creating docker group..${NC}"
-# groupadd docker
-echo -e "${ARROW} ${YELLOW}Adding $usernew to docker group...${NC}"
-adduser "$usernew" docker 
-echo -e "${NC}"
-echo -e "${YELLOW}=====================================================${NC}"
-echo -e "${YELLOW}Running through some checks...${NC}"
-echo -e "${YELLOW}=====================================================${NC}"
-
-if sudo docker run hello-world > /dev/null 2>&1  
-then
-	echo -e "${CHECK_MARK} ${CYAN}Docker is installed${NC}"
-else
-	echo -e "${X_MARK} ${CYAN}Docker did not installed${NC}"
-fi
-
-if [[ $(getent group docker | grep "$usernew") ]] 
-then
-	echo -e "${CHECK_MARK} ${CYAN}User $usernew is member of 'docker'${NC}"
-else
-	echo -e "${X_MARK} ${CYAN}User $usernew is not member of 'docker'${NC}"
-fi
-
-echo -e "${YELLOW}=====================================================${NC}"
-echo -e "${NC}"
-read -p "Would you like switch to user account Y/N?" -n 1 -r
-echo -e "${NC}"
-if [[ $REPLY =~ ^[Yy]$ ]]
-then
-su - $usernew
-fi
 
 }
 
@@ -1441,72 +1314,65 @@ echo -e "${GREEN}OS: Ubuntu 16/18/19/20, Debian 9/10 ${NC}"
 echo -e "${GREEN}Created by: XK4MiLX from Flux's team${NC}"
 echo -e "${GREEN}Special thanks to dk808, CryptoWrench && jriggs28${NC}"
 echo -e "${YELLOW}================================================================${NC}"
-echo -e "${CYAN}1  - Install Docker${NC}"
-echo -e "${CYAN}2  - Install FluxNode${NC}"
-echo -e "${CYAN}3  - FluxNode analyzer and fixer${NC}"
-echo -e "${CYAN}4  - Install watchdog for FluxNode${NC}"
-echo -e "${CYAN}5  - Restore Flux MongoDB datatable from bootstrap${NC}"
-echo -e "${CYAN}6  - Restore Flux blockchain from bootstrap${NC}"
-echo -e "${CYAN}7  - Create FluxNode installation config file${NC}"
-echo -e "${CYAN}8  - Re-install Flux${NC}"
-echo -e "${CYAN}9  - Flux Daemon Reconfiguration${NC}"
-echo -e "${CYAN}10 - Restore Kadena node blockchain from bootstrap${NC}"
-#echo -e "${CYAN}8 - Install Linux Kernel 5.X for Ubuntu 18.04${NC}"
+echo -e "${CYAN}1  - Install FluxNode${NC}"
+echo -e "${CYAN}2  - FluxNode analyzer and fixer${NC}"
+echo -e "${CYAN}3  - Install watchdog for FluxNode${NC}"
+echo -e "${CYAN}4  - Restore Flux MongoDB datatable from bootstrap${NC}"
+echo -e "${CYAN}5  - Restore Flux blockchain from bootstrap${NC}"
+echo -e "${CYAN}6  - Create FluxNode installation config file${NC}"
+echo -e "${CYAN}7  - Re-install Flux${NC}"
+echo -e "${CYAN}8  - Flux Daemon Reconfiguration${NC}"
+echo -e "${CYAN}9 - Restore Kadena node blockchain from bootstrap${NC}"
 echo -e "${YELLOW}================================================================${NC}"
 
 read -rp "Pick an option and hit ENTER: "
 
   case "$REPLY" in
 
- 1)  
-    clear
-    sleep 1
-    install_docker
- ;;
- 2) 
+ 1) 
     clear
     sleep 1
     install_node
  ;;
- 3)     
+ 2)     
     clear
     sleep 1
     analyzer_and_fixer
  ;;
-  4)  
+  3)  
     clear
     sleep 1
     install_watchdog   
  ;;
  
- 5)  
+ 4)  
     clear
     sleep 1
     mongodb_bootstrap     
  ;;
-  6)  
+  5)  
     clear
     sleep 1
     flux_daemon_bootstrap     
  ;; 
-  7)
+  6)
     clear
     sleep 1
     create_config
  ;;
-   8)
+   7)
     clear
     sleep 1
     install_flux
  ;;
- 9)
+ 8)
    clear
    sleep 1
    daemon_reconfiguration
    
  ;;
  
-  10)
+  9)
    clear
    sleep 1
    kda_bootstrap
